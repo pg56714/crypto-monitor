@@ -26,7 +26,23 @@ class OI(object):
 
     async def getOI(self) -> pl.DataFrame:
         """並行取得多個商品的最新 OI 與價格與變化率"""
-        symbols = self.config["valid_symbol"]
+        symbols_config = self.config.get("valid_symbol")
+        # 若未提供或為空，或指定為 "ALL"，則抓取所有 USDT 永續合約之交易對
+        if not symbols_config or (isinstance(symbols_config, str) and symbols_config.upper() == "ALL"):
+            try:
+                await self.exchange.load_markets()
+                symbols = [
+                    market["id"]
+                    for market in self.exchange.markets.values()
+                    if market.get("swap")
+                    and market.get("linear")
+                    and market.get("active")
+                    and market.get("quote") == "USDT"
+                ]
+            except Exception:
+                symbols = []
+        else:
+            symbols = symbols_config
         timeframe = self.config.get("timeframe", "5m")
 
         async def fetch_symbol(symbol):
@@ -70,7 +86,14 @@ class OI(object):
                 "funding_pct": funding_pct,
             }
 
-        tasks = [asyncio.create_task(fetch_symbol(s)) for s in symbols]
+        # 控制並發，避免過度打爆交易所 API
+        semaphore = asyncio.Semaphore(10)
+
+        async def limited_fetch(s):
+            async with semaphore:
+                return await fetch_symbol(s)
+
+        tasks = [asyncio.create_task(limited_fetch(s)) for s in symbols]
         results = await asyncio.gather(*tasks)
         df = pl.DataFrame(
             results,

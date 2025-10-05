@@ -33,3 +33,22 @@
    chmod +x script/deploy.sh
    script/deploy.sh
    ```
+
+## josn setting
+
+```json
+"valid_symbol": [
+  "BTCUSDT",
+  "ETHUSDT",
+  "BNBUSDT",
+  "SOLUSDT",
+  "ADAUSDT",
+  "XRPUSDT",
+  "DOGEUSDT",
+  "SUIUSDT"
+],
+
+or
+
+"valid_symbol": "ALL",
+```

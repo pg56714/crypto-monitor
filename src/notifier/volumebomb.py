@@ -40,18 +40,37 @@ class VolumeBomb(object):
         2. 轉換成DataFrame以及對應的格式
         """
         ohlcv_dict = {}
-        tasks = []
+
+        # 解析 symbols：支援 ALL/空值 -> 自動抓 USDT 線性永續、啟用中商品
+        symbols_config = self.config.get("valid_symbol")
+        if not symbols_config or (isinstance(symbols_config, str) and symbols_config.upper() == "ALL"):
+            try:
+                await self.exchange.load_markets()
+                symbols = [
+                    market["id"]
+                    for market in self.exchange.markets.values()
+                    if market.get("swap")
+                    and market.get("linear")
+                    and market.get("active")
+                    and market.get("quote") == "USDT"
+                ]
+            except Exception:
+                symbols = []
+        else:
+            symbols = symbols_config
+
+        # 並發限制，避免過度請求
+        semaphore = asyncio.Semaphore(10)
 
         async def get_ohlcv(symbol, timeframe):
-            return await self.exchange.fetch_ohlcv(symbol, timeframe, limit=100)
+            async with semaphore:
+                return await self.exchange.fetch_ohlcv(symbol, timeframe, limit=100)
 
-        for symbol in self.config["valid_symbol"]:
-            task = asyncio.create_task(get_ohlcv(symbol, self.timeframe))
-            tasks.append(task)
+        tasks = [asyncio.create_task(get_ohlcv(symbol, self.timeframe)) for symbol in symbols]
 
         responses = await asyncio.gather(*tasks)
         for i, response in enumerate(responses):
-            symbol = self.config["valid_symbol"][i]
+            symbol = symbols[i]
 
             df = pl.DataFrame(response, schema=["time", "open", "high", "low", "close", "volume"])
             df = df.with_columns(
