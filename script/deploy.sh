@@ -5,7 +5,9 @@ echo "🚀 Starting deployment at $(date)"
 
 # Step 1: Build new image with a temporary tag
 echo "📦 Building new image..."
-docker build --no-cache -t crypto-notifier:new .
+# Build from project root even when running inside script/
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+docker build --no-cache -t crypto-notifier:new -f "$ROOT_DIR/Dockerfile" "$ROOT_DIR"
 
 # Step 2: Stop and remove old container if it exists (any state)
 OLD_CONTAINER=$(docker ps -aq -f name=^/crypto-notifier$)
