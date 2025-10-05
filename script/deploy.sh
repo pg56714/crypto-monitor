@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e  # Exit on any error
 
+# Change to project root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 echo "🚀 Starting deployment at $(date)"
+echo "📂 Working directory: $(pwd)"
 
 # Step 1: Build new image with a temporary tag
 echo "📦 Building new image..."
-# Build from project root even when running inside script/
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-docker build --no-cache -t crypto-notifier:new -f "$ROOT_DIR/Dockerfile" "$ROOT_DIR"
+docker build --no-cache -t crypto-notifier:new .
 
 # Step 2: Stop and remove old container if it exists (any state)
 OLD_CONTAINER=$(docker ps -aq -f name=^/crypto-notifier$)
