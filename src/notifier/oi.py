@@ -53,13 +53,34 @@ class OI(object):
             except Exception:
                 pass
 
-            return {"symbol": symbol, "oi": latest_oi, "oi_pct": oi_pct, "price": last_price}
+            funding_pct = None
+            try:
+                fr = await self.exchange.fetch_funding_rate(symbol)
+                rate = fr.get("fundingRate")
+                if rate is not None:
+                    funding_pct = rate * 100.0
+            except Exception:
+                pass
+
+            return {
+                "symbol": symbol,
+                "oi": latest_oi,
+                "oi_pct": oi_pct,
+                "price": last_price,
+                "funding_pct": funding_pct,
+            }
 
         tasks = [asyncio.create_task(fetch_symbol(s)) for s in symbols]
         results = await asyncio.gather(*tasks)
         df = pl.DataFrame(
             results,
-            schema={"symbol": pl.Utf8, "oi": pl.Float64, "oi_pct": pl.Float64, "price": pl.Float64},
+            schema={
+                "symbol": pl.Utf8,
+                "oi": pl.Float64,
+                "oi_pct": pl.Float64,
+                "price": pl.Float64,
+                "funding_pct": pl.Float64,
+            },
         )
         return df
 
@@ -73,18 +94,20 @@ class OI(object):
             return
 
         df = df.sort("oi_pct", descending=True, nulls_last=True)
-        header = "```[📊｜OI 異常偵測] (|Δ| ≥ 1.5%)\nSYMBOL        OI            ΔOI(%)       PRICE"
+        header = "```[📊｜OI 異常偵測] (|Δ| ≥ 1.5%)\nSYMBOL        OI            ΔOI(%)       FR(%)     PRICE"
         lines = []
         for row in df.iter_rows(named=True):
             symbol = row["symbol"]
             oi_val = row["oi"]
             oi_pct = row.get("oi_pct")
             price_val = row["price"]
+            fr_pct = row.get("funding_pct")
             arrow = "" if oi_pct is None else ("🔼" if oi_pct >= 0 else "🔽")
             pct_str = "N/A" if oi_pct is None else f"{oi_pct:>7.2f}{arrow}"
+            fr_str = "N/A" if fr_pct is None else f"{fr_pct:>6.4f}"
             if oi_val is None:
-                lines.append(f"{symbol:<8}    N/A           {pct_str:<12} {price_val}")
+                lines.append(f"{symbol:<8}    N/A           {pct_str:<12} {fr_str:<8} {price_val}")
             else:
-                lines.append(f"{symbol:<8}    {oi_val:>12.0f}   {pct_str:<12} {price_val}")
+                lines.append(f"{symbol:<8}    {oi_val:>12.0f}   {pct_str:<12} {fr_str:<8} {price_val}")
         message = "\n".join([header] + lines + ["```"])
         self.discord.send_message("OI", message)
