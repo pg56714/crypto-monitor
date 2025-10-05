@@ -28,3 +28,8 @@
    ```sh
    pre-commit run --all-files
    ```
+7. Deploy the project:
+   ```sh
+   chmod +x script/deploy.sh
+   script/deploy.sh
+   ```
