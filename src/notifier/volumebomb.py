@@ -16,6 +16,7 @@ class VolumeBomb(object):
         self.discord = DiscordConnector()
         self.exchange = ccxt.binanceusdm()
         self.config = Config(CONFIG_PATH)["VolumeBomb"]
+        self.timeframe = self.config.get("timeframe", "5m")
 
     async def run(self):
         """執行爆量檢查
@@ -45,7 +46,7 @@ class VolumeBomb(object):
             return await self.exchange.fetch_ohlcv(symbol, timeframe, limit=100)
 
         for symbol in self.config["valid_symbol"]:
-            task = asyncio.create_task(get_ohlcv(symbol, "5m"))
+            task = asyncio.create_task(get_ohlcv(symbol, self.timeframe))
             tasks.append(task)
 
         responses = await asyncio.gather(*tasks)
@@ -91,8 +92,7 @@ class VolumeBomb(object):
 
         步驟：
         1. 判斷趨勢
-        2. 判斷成交量是否大於平均成交量的10倍
-        3. 發送Discord訊息
+        2. 判斷成交量是否大於平均成交量的 10 倍
         """
         close_values = ohlcv_df.select(pl.col("close")).to_series()
         volume_values = ohlcv_df.select(pl.col("volume")).to_series()

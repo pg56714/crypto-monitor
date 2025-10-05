@@ -5,9 +5,10 @@ from src.config.env_config import Env
 class DiscordConnector:
     def __init__(self):
         self.webhooks = {
+            "TEST": Env.DISCORD_CHANNEL_TEST,
             "VOLUMEBOMB": Env.DISCORD_CHANNEL_VOLUMEBOMB,
             "CRITICAL": Env.DISCORD_CHANNEL_CRITICAL,
-            "TEST": Env.DISCORD_CHANNEL_TEST,
+            "OI": Env.DISCORD_CHANNEL_OI,
         }
 
     def send_message(self, channel, message):

@@ -9,6 +9,20 @@
       "XRPUSDT",
       "DOGEUSDT",
       "SUIUSDT"
-    ]
+    ],
+    "timeframe": "5m"
+  },
+  "OI": {
+    "valid_symbol": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "SOLUSDT",
+      "ADAUSDT",
+      "XRPUSDT",
+      "DOGEUSDT",
+      "SUIUSDT"
+    ],
+    "timeframe": "3m"
   }
 }
