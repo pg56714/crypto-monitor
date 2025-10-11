@@ -2,12 +2,11 @@ import json
 
 
 class Config:
-    _configInstances = {}
+    _config_cache = {}
 
     def __new__(cls, config_file_path):
-        if config_file_path not in cls._configInstances:
-            cls._configInstances[config_file_path] = super(Config, cls).__new__(cls)
-            instance = cls._configInstances[config_file_path]
+        if config_file_path not in cls._config_cache:
             with open(config_file_path, "r") as f:
-                instance.config = json.load(f)
-        return cls._configInstances[config_file_path].config
+                config_data = json.load(f)
+            cls._config_cache[config_file_path] = config_data
+        return cls._config_cache[config_file_path]
