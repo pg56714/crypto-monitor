@@ -108,16 +108,16 @@ class OI(object):
         return df
 
     def checkSignal(self, oi_df: pl.DataFrame):
-        """只在 |ΔOI| >= 1.5% 的品項時送出精簡列表，沒有觸發則不發"""
+        """只在 |ΔOI| >= 1.0% 的品項時送出精簡列表，沒有觸發則不發"""
         if oi_df.is_empty():
             return
 
-        df = oi_df.filter(pl.col("oi_pct").abs() >= 1.5)
+        df = oi_df.filter(pl.col("oi_pct").abs() >= 1.0)
         if df.is_empty():
             return
 
         df = df.sort("oi_pct", descending=True, nulls_last=True)
-        header = "```[📊｜OI 異常偵測] (|Δ| ≥ 1.5%)\nSYMBOL        OI            ΔOI(%)       FR(%)     PRICE"
+        header = "```[📊｜OI 異常偵測] (|Δ| ≥ 1.0%)\nSYMBOL        OI            ΔOI(%)       FR(%)     PRICE"
         lines = []
         for row in df.iter_rows(named=True):
             symbol = row["symbol"]
