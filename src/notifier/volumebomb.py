@@ -1,49 +1,42 @@
-import ccxt.async_support as ccxt
+"""Volume spike notifier for Binance perpetual contracts."""
+
 import asyncio
+from typing import Any
+
+import ccxt.async_support as ccxt
 import polars as pl
-from pathlib import Path
 
-from src.core.discord import DiscordConnector
+from src.common.paths import get_notification_config_path
 from src.core.config_reader import Config
-
-ROOT = Path(__file__).resolve().parents[2]
-CONFIG_DIR = ROOT / "src" / "config"
-CONFIG_PATH = CONFIG_DIR / "notification.json"
+from src.core.discord import DiscordConnector
 
 
-class VolumeBomb(object):
-    def __init__(self):
+class VolumeBomb:
+    """Detect sudden increases in trading volume."""
+
+    def __init__(self) -> None:
         self.discord = DiscordConnector()
         self.exchange = ccxt.binanceusdm()
-        self.config = Config(CONFIG_PATH)["VolumeBomb"]
-        self.timeframe = self.config.get("timeframe", "5m")
+        config: dict[str, Any] = Config(get_notification_config_path())["VolumeBomb"]
+        self.config = config
+        self.timeframe: str = config.get("timeframe", "5m")
 
-    async def run(self):
-        """執行爆量檢查
-
-        步驟：
-        1. 取得K線資料
-        2. 清理數據並生成平均成交量
-        3. 檢查是否有爆量訊號
-        """
+    async def run(self) -> None:
+        """Execute the volume spike detection workflow."""
         ohlcv_dict = await self.getKline()
         for symbol, ohlcv_df in ohlcv_dict.items():
             mean_volume = self.cleanData2GenerateMeanVolume(ohlcv_df)
             self.checkSignal(symbol, mean_volume, ohlcv_df)
         await self.exchange.close()
 
-    async def getKline(self) -> dict:
-        """取得K線資料（用async的方法取得多筆數據會較快）
+    async def getKline(self) -> dict[str, pl.DataFrame]:
+        """Retrieve OHLCV data for configured symbols."""
+        ohlcv_dict: dict[str, pl.DataFrame] = {}
 
-        步驟：
-        1. 取得K線資料
-        2. 轉換成DataFrame以及對應的格式
-        """
-        ohlcv_dict = {}
-
-        # 解析 symbols：支援 ALL/空值 -> 自動抓 USDT 線性永續、啟用中商品
         symbols_config = self.config.get("valid_symbol")
-        if not symbols_config or (isinstance(symbols_config, str) and symbols_config.upper() == "ALL"):
+        if not symbols_config or (
+            isinstance(symbols_config, str) and symbols_config.upper() == "ALL"
+        ):
             try:
                 await self.exchange.load_markets()
                 symbols = [
@@ -59,21 +52,21 @@ class VolumeBomb(object):
         else:
             symbols = symbols_config
 
-        # 並發限制，避免過度請求
         semaphore = asyncio.Semaphore(10)
 
-        async def get_ohlcv(symbol, timeframe):
+        async def get_ohlcv(symbol: str, timeframe: str) -> list[list[float | int]]:
             async with semaphore:
                 return await self.exchange.fetch_ohlcv(symbol, timeframe, limit=100)
 
         tasks = [asyncio.create_task(get_ohlcv(symbol, self.timeframe)) for symbol in symbols]
 
         responses = await asyncio.gather(*tasks)
-        for i, response in enumerate(responses):
-            symbol = symbols[i]
-
-            df = pl.DataFrame(response, schema=["time", "open", "high", "low", "close", "volume"])
-            df = df.with_columns(
+        for index, response in enumerate(responses):
+            symbol = symbols[index]
+            df = pl.DataFrame(
+                response,
+                schema=["time", "open", "high", "low", "close", "volume"],
+            ).with_columns(
                 [
                     pl.col("time").cast(pl.Int64),
                     pl.col("open").cast(pl.Float64),
@@ -84,47 +77,34 @@ class VolumeBomb(object):
                 ]
             )
 
-            if symbol not in ohlcv_dict:
-                ohlcv_dict[symbol] = {}
             ohlcv_dict[symbol] = df.slice(
                 0, -1
-            )  # 不取最後一筆資料，因為我們是每五分鐘的0秒開始偵測，最後一根K線才剛開始
+            )  # Ignore the most recent bar because it is incomplete.
         return ohlcv_dict
 
-    def cleanData2GenerateMeanVolume(self, ohlcv_df):
-        """清理數據並生成平均成交量
+    def cleanData2GenerateMeanVolume(self, ohlcv_df: pl.DataFrame) -> float:
+        """Clean data and compute the mean trading volume."""
+        q1 = ohlcv_df.select(pl.col("volume").quantile(0.25)).item()
+        q3 = ohlcv_df.select(pl.col("volume").quantile(0.75)).item()
+        iqr = q3 - q1
 
-        步驟：
-        1. 將成交量中的極端值去除
-        2. 計算平均成交量
-        """
-        Q1 = ohlcv_df.select(pl.col("volume").quantile(0.25)).item()
-        Q3 = ohlcv_df.select(pl.col("volume").quantile(0.75)).item()
-        IQR = Q3 - Q1
-
-        filtered_df = ohlcv_df.filter((pl.col("volume") >= Q1 - 1.5 * IQR) & (pl.col("volume") <= Q3 + 1.5 * IQR))
+        filtered_df = ohlcv_df.filter(
+            (pl.col("volume") >= q1 - 1.5 * iqr) & (pl.col("volume") <= q3 + 1.5 * iqr)
+        )
         mean_volume = filtered_df.select(pl.col("volume").mean()).item()
-        return mean_volume
+        return float(mean_volume)
 
-    def checkSignal(self, symbol, mean_volume, ohlcv_df):
-        """檢查是否有爆量訊號
-
-        步驟：
-        1. 判斷趨勢
-        2. 判斷成交量是否大於平均成交量的 10 倍
-        """
+    def checkSignal(self, symbol: str, mean_volume: float, ohlcv_df: pl.DataFrame) -> None:
+        """Inspect the latest candle and send a notification when the volume spikes."""
         close_values = ohlcv_df.select(pl.col("close")).to_series()
         volume_values = ohlcv_df.select(pl.col("volume")).to_series()
 
         slope = close_values[-1] - close_values[-10]
-
-        if slope <= 0:
-            trend = "下跌"
-        else:
-            trend = "上漲"
+        trend = "上漲" if slope > 0 else "下跌"
 
         if volume_values[-1] >= mean_volume * 10:
             message = (
-                f"```[🔥｜Volume Bomb] {symbol}爆量{trend}\n現價：{close_values[-1]}\n成交量：{volume_values[-1]}```"
+                "```[🔥｜Volume Bomb] "
+                f"{symbol}爆量{trend}\n現價：{close_values[-1]}\n成交量：{volume_values[-1]}```"
             )
             self.discord.send_message("VOLUMEBOMB", message)

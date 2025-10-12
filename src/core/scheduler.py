@@ -1,15 +1,17 @@
-from src.core.discord import DiscordConnector
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.executors.pool import ThreadPoolExecutor
-from datetime import datetime
-import traceback
-import asyncio
+"""Scheduler helpers for orchestrating notification jobs."""
 
-# 設定最大同時 30 條執行緒
+import asyncio
+import traceback
+from datetime import datetime
+from typing import Protocol
+
+from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.schedulers.background import BackgroundScheduler
+
+from src.core.discord import DiscordConnector
+
 executors = {"default": ThreadPoolExecutor(30)}
 
-# 若有多個任務堆積，只執行一次
-# 任務錯過執行時間時的容錯時間（None 代表不限制）
 job_defaults = {
     "coalesce": True,
     "misfire_grace_time": None,
@@ -21,28 +23,44 @@ scheduler = BackgroundScheduler(
 )
 
 
-class BaseScheduler(object):
-    def __init__(self):
+class SyncJob(Protocol):
+    """Protocol representing a synchronous job."""
+
+    def run(self) -> None:
+        """Execute the job."""
+
+
+class AsyncJob(Protocol):
+    """Protocol representing an asynchronous job."""
+
+    async def run(self) -> None:
+        """Execute the job."""
+
+
+class BaseScheduler:
+    """Shared helpers for scheduling notifier jobs and dispatching errors."""
+
+    def __init__(self) -> None:
         self.discord = DiscordConnector()
 
-    def _format_error_message(self, job_class, exception: Exception) -> str:
-        return (
-            f"```"
-            f"Error: {job_class.__name__} failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"{traceback.format_exc()[-1900:]}\n"
-            f"```"
-        )
+    def _format_error_message(self, job_class: type[object], exception: Exception) -> str:
+        """Construct a formatted Discord message for job failures."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        traceback_snippet = traceback.format_exc()[-1900:]
+        return f"```Error: {job_class.__name__} failed at {timestamp}\n{traceback_snippet}\n```"
 
-    def execute_sync_job(self, job_class, channel: str = "CRITICAL"):
+    def execute_sync_job(self, job_class: type[SyncJob], channel: str = "CRITICAL") -> None:
+        """Run a synchronous job and report failures to Discord."""
         try:
             job_class().run()
-        except Exception as e:
-            message = self._format_error_message(job_class, e)
+        except Exception as exc:  # noqa: BLE001 - capture all to notify operators
+            message = self._format_error_message(job_class, exc)
             self.discord.send_message(channel, message)
 
-    def execute_async_job(self, job_class, channel: str = "CRITICAL"):
+    def execute_async_job(self, job_class: type[AsyncJob], channel: str = "CRITICAL") -> None:
+        """Run an asynchronous job and report failures to Discord."""
         try:
             asyncio.run(job_class().run())
-        except Exception as e:
-            message = self._format_error_message(job_class, e)
+        except Exception as exc:  # noqa: BLE001 - capture all to notify operators
+            message = self._format_error_message(job_class, exc)
             self.discord.send_message(channel, message)
