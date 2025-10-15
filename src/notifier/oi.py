@@ -19,7 +19,7 @@ class OI:
         self.exchange = ccxt.binanceusdm()
         config: dict[str, Any] = Config(get_notification_config_path())
         self.config = config["OI"]
-        self.threshold_pct: float = float(self.config.get("threshold_pct", 1.0))
+        self.threshold_pct: float = float(self.config.get("threshold_pct", 0.5))
 
     async def run(self) -> None:
         """Fetch the latest OI snapshot and dispatch notifications."""
@@ -48,7 +48,7 @@ class OI:
         else:
             symbols = symbols_config
 
-        timeframe = self.config.get("timeframe", "5m")
+        timeframe = self.config.get("timeframe", "3m")
 
         async def fetch_symbol(symbol: str) -> dict[str, float | str | None]:
             try:
