@@ -19,7 +19,7 @@ class OI:
         self.exchange = ccxt.binanceusdm()
         config: dict[str, Any] = Config(get_notification_config_path())
         self.config = config["OI"]
-        self.threshold_pct: float = float(self.config.get("threshold_pct", 0.5))
+        self.threshold_pct: float = float(self.config.get("threshold_pct", 0.1))
 
     async def run(self) -> None:
         """Fetch the latest OI snapshot and dispatch notifications."""
