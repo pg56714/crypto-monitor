@@ -17,7 +17,7 @@ class VolumeBomb:
     def __init__(self) -> None:
         self.discord = DiscordConnector()
         self.exchange = ccxt.binanceusdm()
-        config: dict[str, Any] = Config(get_notification_config_path())["VolumeBomb"]
+        config: dict[str, Any] = Config(get_notification_config_path()).get("VolumeBomb", {})
         self.config = config
         self.timeframe: str = config.get("timeframe", "5m")
 
@@ -34,23 +34,7 @@ class VolumeBomb:
         ohlcv_dict: dict[str, pl.DataFrame] = {}
 
         symbols_config = self.config.get("valid_symbol")
-        if not symbols_config or (
-            isinstance(symbols_config, str) and symbols_config.upper() == "ALL"
-        ):
-            try:
-                await self.exchange.load_markets()
-                symbols = [
-                    market["id"]
-                    for market in self.exchange.markets.values()
-                    if market.get("swap")
-                    and market.get("linear")
-                    and market.get("active")
-                    and market.get("quote") == "USDT"
-                ]
-            except Exception:
-                symbols = []
-        else:
-            symbols = symbols_config
+        symbols = await self._resolve_symbols(symbols_config)
 
         semaphore = asyncio.Semaphore(10)
 
@@ -81,6 +65,42 @@ class VolumeBomb:
                 0, -1
             )  # Ignore the most recent bar because it is incomplete.
         return ohlcv_dict
+
+    async def _resolve_symbols(self, symbols_config: dict[str, Any] | None) -> list[str]:
+        """Expand configuration directives into specific trading symbols."""
+        if not symbols_config:
+            return []
+
+        if isinstance(symbols_config, str):
+            if symbols_config.upper() == "ALL":
+                return await self._fetch_all_symbols()
+            return [symbols_config]
+
+        if isinstance(symbols_config, list):
+            cleaned = [
+                symbol for symbol in symbols_config if isinstance(symbol, str) and symbol.strip()
+            ]
+            if any(symbol.upper() == "ALL" for symbol in cleaned):
+                return await self._fetch_all_symbols()
+            return cleaned
+
+        return []
+
+    async def _fetch_all_symbols(self) -> list[str]:
+        """Load all active linear USDT perpetual markets from the exchange."""
+        try:
+            await self.exchange.load_markets()
+        except Exception:
+            return []
+
+        return [
+            market["id"]
+            for market in self.exchange.markets.values()
+            if market.get("swap")
+            and market.get("linear")
+            and market.get("active")
+            and market.get("quote") == "USDT"
+        ]
 
     def cleanData2GenerateMeanVolume(self, ohlcv_df: pl.DataFrame) -> float:
         """Clean data and compute the mean trading volume."""

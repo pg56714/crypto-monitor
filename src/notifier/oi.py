@@ -19,7 +19,7 @@ class OI:
         self.exchange = ccxt.binanceusdm()
         config: dict[str, Any] = Config(get_notification_config_path())
         self.config = config["OI"]
-        self.threshold_pct: float = float(self.config.get("threshold_pct", 1.0))
+        self.threshold_pct: float = float(self.config.get("threshold_pct", 1.5))
 
     async def run(self) -> None:
         """Fetch the latest OI snapshot and dispatch notifications."""
@@ -30,25 +30,23 @@ class OI:
     async def getOI(self) -> pl.DataFrame:
         """Collect OI metrics for all configured symbols."""
         symbols_config = self.config.get("valid_symbol")
-        if not symbols_config or (
-            isinstance(symbols_config, str) and symbols_config.upper() == "ALL"
-        ):
-            try:
-                await self.exchange.load_markets()
-                symbols = [
-                    market["id"]
-                    for market in self.exchange.markets.values()
-                    if market.get("swap")
-                    and market.get("linear")
-                    and market.get("active")
-                    and market.get("quote") == "USDT"
-                ]
-            except Exception:  # noqa: BLE001 - fall back to empty list when API fails
-                symbols = []
-        else:
-            symbols = symbols_config
+        symbols = await self._resolve_symbols(symbols_config)
 
-        timeframe = self.config.get("timeframe", "3m")
+        timeframe = self.config.get("timeframe", "5m")
+        if timeframe not in {
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "12h",
+            "1d",
+            "3d",
+            "1w",
+        }:
+            timeframe = "5m"
 
         async def fetch_symbol(symbol: str) -> dict[str, float | str | None]:
             try:
@@ -57,8 +55,8 @@ class OI:
                     timeframe=timeframe,
                     limit=3,
                 )
-                latest_oi = history[-1]["openInterest"] if history else None
-                prev_oi = history[-2]["openInterest"] if history and len(history) >= 2 else None
+                latest_oi = self._extract_oi(history[-1] if history else None)
+                prev_oi = self._extract_oi(history[-2]) if history and len(history) >= 2 else None
             except Exception:  # noqa: BLE001 - API reliability varies
                 latest_oi = None
                 prev_oi = None
@@ -109,6 +107,65 @@ class OI:
                 "funding_pct": pl.Float64,
             },
         )
+
+    async def _resolve_symbols(self, symbols_config: dict[str, Any] | None) -> list[str]:
+        """Expand configuration directives into specific trading symbols."""
+        if not symbols_config:
+            return []
+
+        if isinstance(symbols_config, str):
+            if symbols_config.upper() == "ALL":
+                return await self._fetch_all_symbols()
+            return [symbols_config]
+
+        if isinstance(symbols_config, list):
+            cleaned = [
+                symbol for symbol in symbols_config if isinstance(symbol, str) and symbol.strip()
+            ]
+            if any(symbol.upper() == "ALL" for symbol in cleaned):
+                return await self._fetch_all_symbols()
+            return cleaned
+
+        return []
+
+    async def _fetch_all_symbols(self) -> list[str]:
+        """Load all active linear USDT perpetual markets from the exchange."""
+        try:
+            await self.exchange.load_markets()
+        except Exception:  # noqa: BLE001 - API may fail temporarily
+            return []
+
+        return [
+            market["id"]
+            for market in self.exchange.markets.values()
+            if market.get("swap")
+            and market.get("linear")
+            and market.get("active")
+            and market.get("quote") == "USDT"
+        ]
+
+    @staticmethod
+    def _extract_oi(entry: dict[str, Any] | None) -> float | None:
+        """Extract an open interest value from a CCXT response entry."""
+        if entry is None:
+            return None
+
+        for key in ("openInterestValue",):
+            value = entry.get(key)
+            if value is not None:
+                return float(value)
+
+        info = entry.get("info")
+        if isinstance(info, dict):
+            for key in ("sumOpenInterestValue",):
+                value = info.get(key)
+                if value is not None:
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        continue
+
+        return None
 
     def checkSignal(self, oi_df: pl.DataFrame) -> None:
         """Send a summary when |ΔOI| exceeds the configured threshold."""

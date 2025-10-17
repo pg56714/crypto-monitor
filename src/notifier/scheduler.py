@@ -23,7 +23,7 @@ class NotificationScheduler(BaseScheduler):
         scheduler.add_job(
             self.execute_async_job,
             "cron",
-            minute="*/3",
-            second=0,
+            minute="*/5",
+            second=10,
             args=[OI],
         )
