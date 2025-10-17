@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.common.paths import get_notification_config_path
 from src.core.config_reader import Config
 from src.notifier.oi import OI as OINotifier
+from src.notifier.oi import OI_GROUP_DEFINITIONS
 
 MAX_SYMBOLS_TO_PRINT = 5
 OI_SUPPORTED_TIMEFRAMES = {
@@ -115,6 +116,47 @@ async def inspect_oi_calls() -> None:
         print(f"{total_hits} symbols exceed the threshold.")
 
     _print_oi_summary(display_df)
+
+    group_map = {key: [] for key, _, _ in OI_GROUP_DEFINITIONS}
+    unknown: list[dict[str, object]] = []
+    for row in filtered.iter_rows(named=True):
+        symbol = row["symbol"]
+        oi_pct = row.get("oi_pct")
+        funding_pct = row.get("funding_pct")
+        price = row.get("price")
+        record = {
+            "symbol": symbol,
+            "oi_pct": oi_pct,
+            "funding_pct": funding_pct,
+            "price": price,
+        }
+        category = OINotifier._classify_signal(oi_pct, funding_pct)
+        if category in group_map:
+            group_map[category].append(record)
+        else:
+            unknown.append(record)
+
+    print("\nGrouped view (first few per bucket):")
+    for key, title, note in OI_GROUP_DEFINITIONS:
+        bucket = group_map.get(key, [])
+        if not bucket:
+            continue
+        print(f"{title} -> {note}")
+        for record in bucket[:MAX_SYMBOLS_TO_PRINT]:
+            oi_pct = record["oi_pct"]
+            funding_pct = record["funding_pct"]
+            price = record["price"]
+            oi_str = "N/A" if oi_pct is None else f"{oi_pct:+7.2f}%"
+            fr_str = "N/A" if funding_pct is None else f"{funding_pct:+6.4f}%"
+            price_str = "N/A" if price is None else f"{price:.4f}"
+            print(f"  {record['symbol']:<10} dOI={oi_str:<9} FR={fr_str:<11} Price={price_str}")
+
+    if unknown:
+        print("\nFunding / OI N/A:")
+        for record in unknown[:MAX_SYMBOLS_TO_PRINT]:
+            price_str = "N/A" if record["price"] is None else f"{record['price']:.4f}"
+            print(f"  {record['symbol']:<10} dOI=N/A    FR=N/A       Price={price_str}")
+
     await _print_oi_history([row["symbol"] for row in display_df.iter_rows(named=True)], timeframe)
 
 

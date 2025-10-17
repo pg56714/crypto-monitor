@@ -10,6 +10,29 @@ from src.common.paths import get_notification_config_path
 from src.core.config_reader import Config
 from src.core.discord import DiscordConnector
 
+OI_GROUP_DEFINITIONS: list[tuple[str, str, str]] = [
+    (
+        "up_up",
+        "Funding UP & OI UP",
+        "多頭槓桿累積，市場可能過熱，逐步減倉或設定止盈。",
+    ),
+    (
+        "up_down",
+        "Funding UP & OI DOWN",
+        "多頭正在減倉，注意多頭擠壓，觀望或短空布局。",
+    ),
+    (
+        "down_up",
+        "Funding DOWN & OI UP",
+        "空頭壓力增強，空頭擠壓的前兆，留意反彈機會或逢低佈局多單。",
+    ),
+    (
+        "down_down",
+        "Funding DOWN & OI DOWN",
+        "多空都在減倉，市場參與度降低，暫時觀望或縮小倉位。",
+    ),
+]
+
 
 class OI:
     """Monitor open interest changes and send concise alerts."""
@@ -167,8 +190,25 @@ class OI:
 
         return None
 
+    @staticmethod
+    def _classify_signal(oi_pct: float | None, funding_pct: float | None) -> str:
+        """Categorize a row based on funding rate and OI delta signs."""
+        if oi_pct is None or funding_pct is None:
+            return "unknown"
+
+        oi_up = oi_pct >= 0.0
+        funding_up = funding_pct >= 0.0
+
+        if funding_up and oi_up:
+            return "up_up"
+        if funding_up and not oi_up:
+            return "up_down"
+        if not funding_up and oi_up:
+            return "down_up"
+        return "down_down"
+
     def checkSignal(self, oi_df: pl.DataFrame) -> None:
-        """Send a summary when |ΔOI| exceeds the configured threshold."""
+        """Send grouped summaries when |dOI| exceeds the configured threshold."""
         if oi_df.is_empty():
             return
 
@@ -178,21 +218,49 @@ class OI:
 
         df = df.sort("oi_pct", descending=True, nulls_last=True)
         header = (
-            "```[📊｜OI 異常偵測] "
-            f"(|Δ| ≥ {self.threshold_pct:.1f}%)\n"
-            "SYMBOL        ΔOI(%)       FR(%)     PRICE"
+            "```[OI ALERT] "
+            f"(|dOI| >= {self.threshold_pct:.1f}%)\n"
+            "SYMBOL        dOI(%)       FR(%)        PRICE"
         )
-        lines = []
+
+        groups = {key: [] for key, _, _ in OI_GROUP_DEFINITIONS}
+        unknown: list[str] = []
+
         for row in df.iter_rows(named=True):
             symbol = row["symbol"]
             oi_pct = row.get("oi_pct")
             price_val = row["price"]
             fr_pct = row.get("funding_pct")
-            arrow = "" if oi_pct is None else ("🔼" if oi_pct >= 0 else "🔽")
-            pct_str = "N/A" if oi_pct is None else f"{oi_pct:>7.2f}{arrow}"
-            fr_str = "N/A" if fr_pct is None else f"{fr_pct:>6.4f}"
+
+            pct_str = "N/A" if oi_pct is None else f"{oi_pct:+7.2f}%"
+            fr_str = "N/A" if fr_pct is None else f"{fr_pct:+6.4f}%"
             price_str = "N/A" if price_val is None else f"{price_val:.4f}"
-            lines.append(f"{symbol:<8}    {pct_str:<12} {fr_str:<8} {price_str}")
+            line = f"{symbol:<10} {pct_str:<12} {fr_str:<12} {price_str}"
+
+            category = self._classify_signal(oi_pct, fr_pct)
+            if category in groups:
+                groups[category].append(line)
+            else:
+                unknown.append(line)
+
+        lines: list[str] = []
+        for key, title, note in OI_GROUP_DEFINITIONS:
+            bucket = groups.get(key, [])
+            if not bucket:
+                continue
+            if lines:
+                lines.append("")
+            lines.append(title)
+            lines.append(f"  {note}")
+            lines.extend(bucket)
+
+        if unknown:
+            if lines:
+                lines.append("")
+            lines.append("Funding / OI N/A")
+            lines.append("  Missing data; review manually.")
+            lines.extend(unknown)
+
         self._send_chunked_messages(header, lines)
 
     def _send_chunked_messages(self, header: str, lines: list[str]) -> None:
