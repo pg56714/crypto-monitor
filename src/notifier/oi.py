@@ -180,24 +180,19 @@ class OI:
         header = (
             "```[📊｜OI 異常偵測] "
             f"(|Δ| ≥ {self.threshold_pct:.1f}%)\n"
-            "SYMBOL        OI            ΔOI(%)       FR(%)     PRICE"
+            "SYMBOL        ΔOI(%)       FR(%)     PRICE"
         )
         lines = []
         for row in df.iter_rows(named=True):
             symbol = row["symbol"]
-            oi_val = row["oi"]
             oi_pct = row.get("oi_pct")
             price_val = row["price"]
             fr_pct = row.get("funding_pct")
             arrow = "" if oi_pct is None else ("🔼" if oi_pct >= 0 else "🔽")
             pct_str = "N/A" if oi_pct is None else f"{oi_pct:>7.2f}{arrow}"
             fr_str = "N/A" if fr_pct is None else f"{fr_pct:>6.4f}"
-            if oi_val is None:
-                lines.append(f"{symbol:<8}    N/A           {pct_str:<12} {fr_str:<8} {price_val}")
-            else:
-                lines.append(
-                    f"{symbol:<8}    {oi_val:>12.0f}   {pct_str:<12} {fr_str:<8} {price_val}"
-                )
+            price_str = "N/A" if price_val is None else f"{price_val:.4f}"
+            lines.append(f"{symbol:<8}    {pct_str:<12} {fr_str:<8} {price_str}")
         self._send_chunked_messages(header, lines)
 
     def _send_chunked_messages(self, header: str, lines: list[str]) -> None:
