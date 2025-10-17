@@ -1,7 +1,6 @@
 """Tasks that register notifier jobs with the shared scheduler."""
 
 from src.core.scheduler import BaseScheduler, scheduler
-from src.notifier.oi import OI
 from src.notifier.volumebomb import VolumeBomb
 
 
@@ -20,10 +19,10 @@ class NotificationScheduler(BaseScheduler):
             second=0,
             args=[VolumeBomb],
         )
-        scheduler.add_job(
-            self.execute_async_job,
-            "cron",
-            minute="*/5",
-            second=10,
-            args=[OI],
-        )
+        # scheduler.add_job(
+        #     self.execute_async_job,
+        #     "cron",
+        #     minute="*/5",
+        #     second=10,
+        #     args=[OI],
+        # )

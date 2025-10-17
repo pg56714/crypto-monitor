@@ -25,6 +25,7 @@ line-length = 100
 
 [tool.ruff.lint] # https://docs.astral.sh/ruff/settings/#lint
 extend-select = [
+  # "ERA001", # commented-out-code
   "FAST001", # fast-api-redundant-response-model
   "FAST002", # fast-api-non-annotated-dependency
   "D100", # missing-module-docstring
@@ -33,7 +34,6 @@ extend-select = [
   "D103", # undocumented-public-function
   "D213", # multi-line-summary-second-line
   "D400", # missing-trailing-period
-  "ERA001", # commented-out-code
 ]
 select = [
   "B", # flake8-bugbear
