@@ -13,16 +13,7 @@
     "timeframe": "5m"
   },
   "OI": {
-    "valid_symbol": [
-      "BTCUSDT",
-      "ETHUSDT",
-      "BNBUSDT",
-      "SOLUSDT",
-      "ADAUSDT",
-      "XRPUSDT",
-      "DOGEUSDT",
-      "SUIUSDT"
-    ],
+    "valid_symbol": ["ALL"],
     "timeframe": "3m"
   }
 }
