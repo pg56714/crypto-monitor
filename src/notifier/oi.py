@@ -198,5 +198,37 @@ class OI:
                 lines.append(
                     f"{symbol:<8}    {oi_val:>12.0f}   {pct_str:<12} {fr_str:<8} {price_val}"
                 )
-        message = "\n".join([header, *lines, "```"])
-        self.discord.send_message("OI", message)
+        self._send_chunked_messages(header, lines)
+
+    def _send_chunked_messages(self, header: str, lines: list[str]) -> None:
+        """Dispatch one or more Discord messages within the character limit."""
+        if not lines:
+            return
+
+        max_chars = 1900
+        footer = "```"
+        base_len = len(header) + len(footer)
+        chunks: list[list[str]] = []
+        current: list[str] = []
+        current_len = base_len
+
+        for line in lines:
+            addition = len(line) + 1  # account for newline when joining
+            if current and current_len + addition > max_chars:
+                chunks.append(current)
+                current = []
+                current_len = base_len
+
+            current.append(line)
+            current_len += addition
+
+        if current:
+            chunks.append(current)
+
+        total_chunks = len(chunks)
+        for idx, chunk in enumerate(chunks, start=1):
+            page_header = header
+            if total_chunks > 1:
+                page_header = header.replace("```[", f"```[{idx}/{total_chunks}][", 1)
+            message = "\n".join([page_header, *chunk, footer])
+            self.discord.send_message("OI", message)

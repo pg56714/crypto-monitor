@@ -52,3 +52,9 @@ or
 
 "valid_symbol": "ALL",
 ```
+
+## test
+
+```sh
+uv run -m src.tools.print_exchange_debug
+```
