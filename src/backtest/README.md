@@ -35,6 +35,9 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 | `--top-n` | 20 | 取前 N 大交易量幣種 |
 | `--strategy` | both | `ff` / `acc` / `both` |
 | `--output` | backtest_output/ | HTML 報告輸出資料夾 |
+| `--ff-session-tz` | UTC | FiveFactor 進場時段判斷時區 |
+| `--ff-session-start-hour` | — | FiveFactor 允許進場起始小時（含） |
+| `--ff-session-end-hour` | — | FiveFactor 允許進場結束小時（不含） |
 
 報告輸出至 `backtest_output/five_factor.html` 和 `backtest_output/accumulation.html`（已加入 `.gitignore`）。
 
@@ -46,13 +49,13 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 
 | 項目 | 設定 |
 |------|------|
-| 時間框架 | 1h |
+| 時間框架 | 讀取 `src/config/notification.json` 的 `FiveFactor.timeframe` |
 | 信號閾值 | score ≥ 4 或 ≤ −4（滿分 ±6） |
 | 去重視窗 | 同方向 4 小時內不重複進場 |
 | 停損 | 24根K棒最低/高點；距離 > 8% 改用 1.5% fallback |
 | 目標1 | 進場 + 2R |
 | 目標2 | 進場 + 3R |
-| 最長持有 | 72 根（72 小時） |
+| 最長持有 | 72 小時（依時間框架換算 K 棒數） |
 
 ### 收籌/埋伏（Accumulation）
 
@@ -76,8 +79,8 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 **出場優先順序（每根K棒依序判斷）：**
 1. 開盤價跳空穿越停損 → 以開盤價出場
 2. 最低/高點觸及停損 → 以停損價出場
-3. 未到 TP1：觸及 TP1 → 50% 出場，繼續等 TP2
-4. 已到 TP1：觸及 TP2 → 剩餘 50% 出場
+3. 未到 TP1：觸及 TP1 → 50% 出場，繼續等 TP2 或停損
+4. 已到 TP1：觸及 TP2 或停損 → 剩餘 50% 出場
 5. 超過最長持有根數 → 全倉以收盤價出場
 
 **手續費：** 0.1%（來回，各 0.05%），每筆交易扣除。
@@ -86,6 +89,7 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 - 全倉出場：`exit / entry − 1 − fee`
 - TP2 完整達標：`0.5 × (TP1/entry − 1) + 0.5 × (TP2/entry − 1) − fee`
 - TP1 + 超時：`0.5 × (TP1/entry − 1) + 0.5 × (close/entry − 1) − fee`
+- TP1 + 停損：`0.5 × (TP1/entry − 1) + 0.5 × (stop/entry − 1) − fee`
 
 ---
 
@@ -93,18 +97,18 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 
 | 端點 | 限制 |
 |------|------|
-| K線（1h / 1d） | 可拉數年，limit 1500 |
-| OI 歷史（1h） | **最近 30 天**，limit 500（≈ 20.8 天） |
-| 多空比（LSR） | **最近 30 天**，limit 500 |
-| 資金費率 | 較長歷史，limit 1000 |
+| K線（signal timeframe / 1h / 1d） | 依 `startTime` / `endTime` 分頁抓取 |
+| OI 歷史（signal timeframe / 1h） | 依 `startTime` / `endTime` 分頁抓取，保守請求最近 29 天 |
+| 多空比（LSR） | 依 `startTime` / `endTime` 分頁抓取，保守請求最近 29 天 |
+| 資金費率 | 依 `startTime` / `endTime` 分頁抓取 |
 
-OI 和 LSR 不傳 `startTime`，只傳 `endTime + limit`，避免 Binance 拒絕超過 30 天的請求。回測前段（約前 9 天）的 OI/LSR 因此為空，對應因子貢獻為 0。
+必要資料端點若失敗，該幣種會略過並列出錯誤，不會用空資料靜默替代。
+下載結果會快取在 `backtest_output/cache/`，重跑相同區間時會優先使用快取，降低 Binance rate limit 風險。
 
 ---
 
 ## 已知誤差來源
 
 1. **進場假設過樂觀** — 實際可能掛限價等不到，或滑點讓成本更高
-2. **OI/LSR 資料只有後段 20 天** — 前段回測信號的 OI 方向和 LSR 方向為 0，影響五因子分數
-3. **無倉位管理** — 每筆交易視為獨立，未計算同時持倉的資金佔用
-4. **收籌 Pool 每天重算** — 實際運行中 Pool 在程序重啟前不會清除，行為略有差異
+2. **無完整倉位管理** — 報表以已結束交易的日報酬複合序列估算，未做逐根 K 棒資金佔用與同時持倉市值重估
+3. **收籌 Pool 每天重算** — 實際運行中 Pool 在程序重啟前不會清除，行為略有差異

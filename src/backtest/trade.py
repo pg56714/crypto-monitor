@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 _FEE = 0.001  # 0.1% round trip (0.05% each side)
+_PARTIAL_SIZE = 0.5
 
 
 @dataclass
@@ -57,40 +58,48 @@ def simulate_trade(
             exit_px = o if o <= stop else stop if lo <= stop else None
             if exit_px is not None:
                 trade.exit_time_ms = ts
-                trade.exit_reason = "stop"
-                trade.pnl_pct = (exit_px / entry - 1) - _FEE
+                if tp1_filled:
+                    trade.exit_reason = "tp1+stop"
+                    trade.pnl_pct = _partial_long_pnl(entry, tp1, exit_px)
+                else:
+                    trade.exit_reason = "stop"
+                    trade.pnl_pct = (exit_px / entry - 1) - _FEE
                 return trade
             if not tp1_filled and h >= tp1:
                 tp1_filled = True
                 if h >= tp2:
                     trade.exit_time_ms = ts
                     trade.exit_reason = "tp2"
-                    trade.pnl_pct = 0.5 * (tp1 / entry - 1) + 0.5 * (tp2 / entry - 1) - _FEE
+                    trade.pnl_pct = _partial_long_pnl(entry, tp1, tp2)
                     return trade
             elif tp1_filled and h >= tp2:
                 trade.exit_time_ms = ts
                 trade.exit_reason = "tp2"
-                trade.pnl_pct = 0.5 * (tp1 / entry - 1) + 0.5 * (tp2 / entry - 1) - _FEE
+                trade.pnl_pct = _partial_long_pnl(entry, tp1, tp2)
                 return trade
 
         else:  # short
             exit_px = o if o >= stop else stop if h >= stop else None
             if exit_px is not None:
                 trade.exit_time_ms = ts
-                trade.exit_reason = "stop"
-                trade.pnl_pct = (entry / exit_px - 1) - _FEE
+                if tp1_filled:
+                    trade.exit_reason = "tp1+stop"
+                    trade.pnl_pct = _partial_short_pnl(entry, tp1, exit_px)
+                else:
+                    trade.exit_reason = "stop"
+                    trade.pnl_pct = (entry / exit_px - 1) - _FEE
                 return trade
             if not tp1_filled and lo <= tp1:
                 tp1_filled = True
                 if lo <= tp2:
                     trade.exit_time_ms = ts
                     trade.exit_reason = "tp2"
-                    trade.pnl_pct = 0.5 * (entry / tp1 - 1) + 0.5 * (entry / tp2 - 1) - _FEE
+                    trade.pnl_pct = _partial_short_pnl(entry, tp1, tp2)
                     return trade
             elif tp1_filled and lo <= tp2:
                 trade.exit_time_ms = ts
                 trade.exit_reason = "tp2"
-                trade.pnl_pct = 0.5 * (entry / tp1 - 1) + 0.5 * (entry / tp2 - 1) - _FEE
+                trade.pnl_pct = _partial_short_pnl(entry, tp1, tp2)
                 return trade
 
     last = future_klines[min(max_candles - 1, len(future_klines) - 1)]
@@ -100,11 +109,23 @@ def simulate_trade(
     if tp1_filled:
         trade.exit_reason = "tp1+timeout"
         if direction == "long":
-            trade.pnl_pct = 0.5 * (tp1 / entry - 1) + 0.5 * (close / entry - 1) - _FEE
+            trade.pnl_pct = _partial_long_pnl(entry, tp1, close)
         else:
-            trade.pnl_pct = 0.5 * (entry / tp1 - 1) + 0.5 * (entry / close - 1) - _FEE
+            trade.pnl_pct = _partial_short_pnl(entry, tp1, close)
     else:
         trade.exit_reason = "timeout"
         trade.pnl_pct = (close / entry - 1 if direction == "long" else entry / close - 1) - _FEE
 
     return trade
+
+
+def _partial_long_pnl(entry: float, first_exit: float, final_exit: float) -> float:
+    return (
+        _PARTIAL_SIZE * (first_exit / entry - 1) + _PARTIAL_SIZE * (final_exit / entry - 1) - _FEE
+    )
+
+
+def _partial_short_pnl(entry: float, first_exit: float, final_exit: float) -> float:
+    return (
+        _PARTIAL_SIZE * (entry / first_exit - 1) + _PARTIAL_SIZE * (entry / final_exit - 1) - _FEE
+    )

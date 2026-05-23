@@ -161,6 +161,7 @@ class FiveFactor:
         )
         return {
             "symbol": symbol,
+            "timeframe": self.timeframe,
             "score": result.score,
             "verdict": result.verdict,
             "direction": direction,

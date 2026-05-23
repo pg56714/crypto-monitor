@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pandas as pd
-import polars as pl
 import quantstats as qs
 
 if TYPE_CHECKING:
@@ -37,6 +36,10 @@ def print_summary(trades: list[Trade], *, strategy_name: str) -> None:
 
     wins = [t for t in completed if (t.pnl_pct or 0) > 0]
     total_pnl = sum(t.pnl_pct or 0 for t in completed)
+    compounded_pnl = 1.0
+    for trade in completed:
+        compounded_pnl *= 1 + (trade.pnl_pct or 0)
+    compounded_pnl -= 1
     win_rate = len(wins) / len(completed) * 100
     avg_pnl = total_pnl / len(completed) * 100
 
@@ -49,7 +52,7 @@ def print_summary(trades: list[Trade], *, strategy_name: str) -> None:
     print(f"  總交易數：{len(completed)}")
     print(f"  勝率：{win_rate:.1f}%")
     print(f"  平均報酬：{avg_pnl:+.2f}%")
-    print(f"  累計報酬：{total_pnl * 100:.2f}%")
+    print(f"  複合報酬：{compounded_pnl * 100:.2f}%")
     exit_str = "  ".join(f"{k}={v}" for k, v in sorted(exit_counts.items()))
     print(f"  出場分布：{exit_str}")
 
@@ -62,34 +65,25 @@ def print_summary(trades: list[Trade], *, strategy_name: str) -> None:
 
 
 def _trades_to_returns(trades: list[Trade]) -> pd.Series:  # type: ignore[type-arg]
-    """Convert trades to a daily equity returns series for quantstats."""
-    completed = [
-        (t.exit_time_ms, t.pnl_pct)
-        for t in trades
-        if t.exit_time_ms is not None and t.pnl_pct is not None
-    ]
+    """Convert completed trades to a daily compounded return series for quantstats."""
+    completed = sorted(
+        [
+            (t.exit_time_ms, t.pnl_pct)
+            for t in trades
+            if t.exit_time_ms is not None and t.pnl_pct is not None
+        ],
+        key=lambda item: item[0],
+    )
     if not completed:
         return pd.Series(dtype=float)
 
-    df = pl.DataFrame(
-        {
-            "exit_ms": [ms for ms, _ in completed],
-            "pnl": [pnl for _, pnl in completed],
-        }
-    )
-    daily = (
-        df.with_columns(
-            pl.col("exit_ms")
-            .cast(pl.Datetime(time_unit="ms", time_zone="UTC"))
-            .dt.date()
-            .alias("date")
-        )
-        .group_by("date")
-        .agg(pl.col("pnl").sum())
-        .sort("date")
-    )
-    return pd.Series(
-        daily["pnl"].to_list(),
-        index=pd.to_datetime(daily["date"].to_list()),
-        dtype=float,
-    )
+    daily_growth: dict[object, float] = {}
+    for exit_ms, pnl in completed:
+        date = pd.to_datetime(exit_ms, unit="ms", utc=True).date()
+        daily_growth[date] = daily_growth.get(date, 1.0) * (1 + pnl)
+
+    start = min(daily_growth)
+    end = max(daily_growth)
+    index = pd.date_range(start=start, end=end, freq="D")
+    values = [daily_growth.get(day.date(), 1.0) - 1 for day in index]
+    return pd.Series(values, index=index, dtype=float)

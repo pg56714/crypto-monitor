@@ -2,7 +2,7 @@
   "FiveFactor": {
     "enabled": true,
     "valid_symbol": ["ALL"],
-    "timeframe": "5m",
+    "timeframe": "1h",
     "min_volume_usdt": 5000000,
     "dedup_hours": 4
   },

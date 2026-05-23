@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import bisect
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from src.backtest.data import SymbolData
 from src.backtest.trade import Trade, simulate_trade
@@ -16,22 +18,32 @@ from src.scoring.five_factor import score_five_factor
 _KLINE_WINDOW = 24
 _OI_WINDOW = 48
 _ENTRY_SCORE_MIN = 4
-_MAX_HOLD_CANDLES = 72
+_MAX_HOLD_MS = 72 * 3_600_000
 _FALLBACK_STOP_PCT = 0.015
 _MAX_STOP_PCT = 0.08
-_DEDUP_MS = 4 * 3_600_000
-_STEP_MS = 3_600_000
 
 
-def run_five_factor_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -> list[Trade]:
-    """Walk historical 1h data and simulate five-factor trades for one symbol."""
+def run_five_factor_backtest(
+    data: SymbolData,
+    *,
+    start_ms: int,
+    end_ms: int,
+    dedup_hours: int = 4,
+    session_timezone: str = "UTC",
+    session_start_hour: int | None = None,
+    session_end_hour: int | None = None,
+) -> list[Trade]:
+    """Walk historical signal-timeframe data and simulate five-factor trades."""
     klines_by_ts: dict[int, list[Any]] = {}
-    for k in data.klines_1h:
+    for k in data.klines_signal:
         if isinstance(k, list) and k:
             klines_by_ts[int(k[0])] = k
 
     sorted_ts = sorted(klines_by_ts)
     sorted_klines = [klines_by_ts[t] for t in sorted_ts]
+    step_ms = data.signal_step_ms
+    dedup_ms = dedup_hours * 3_600_000
+    max_hold_candles = max(1, _MAX_HOLD_MS // step_ms)
 
     trades: list[Trade] = []
     last_alert: dict[str, int] = {}
@@ -39,19 +51,19 @@ def run_five_factor_backtest(data: SymbolData, *, start_ms: int, end_ms: int) ->
     ts = start_ms
     while ts < end_ms:
         window = [
-            klines_by_ts[ts - (_KLINE_WINDOW - 1 - i) * _STEP_MS]
+            klines_by_ts[ts - (_KLINE_WINDOW - 1 - i) * step_ms]
             for i in range(_KLINE_WINDOW)
-            if ts - (_KLINE_WINDOW - 1 - i) * _STEP_MS in klines_by_ts
+            if ts - (_KLINE_WINDOW - 1 - i) * step_ms in klines_by_ts
         ]
         if len(window) < 2:
-            ts += _STEP_MS
+            ts += step_ms
             continue
 
         dprice_dir = _price_direction(window)
         cvd_dir = direction_from_value(calculate_cvd_from_klines(window))
 
-        candle_end = ts + _STEP_MS - 1
-        oi_window = _window_before(data.oi_hist_1h, "timestamp", candle_end, _OI_WINDOW)
+        candle_end = ts + step_ms - 1
+        oi_window = _window_before(data.oi_hist_signal, "timestamp", candle_end, _OI_WINDOW)
         oi_values = [
             float(r["sumOpenInterestValue"]) for r in oi_window if "sumOpenInterestValue" in r
         ]
@@ -70,8 +82,16 @@ def run_five_factor_backtest(data: SymbolData, *, start_ms: int, end_ms: int) ->
 
         if abs(result.score) >= _ENTRY_SCORE_MIN:
             direction = "long" if result.score > 0 else "short"
-            if ts - last_alert.get(direction, 0) >= _DEDUP_MS:
-                entry_ts = ts + _STEP_MS
+            if (
+                _in_session(
+                    ts,
+                    timezone=session_timezone,
+                    start_hour=session_start_hour,
+                    end_hour=session_end_hour,
+                )
+                and ts - last_alert.get(direction, 0) >= dedup_ms
+            ):
+                entry_ts = ts + step_ms
                 entry_kline = klines_by_ts.get(entry_ts)
                 if entry_kline is not None:
                     entry_price = float(entry_kline[1])
@@ -88,13 +108,33 @@ def run_five_factor_backtest(data: SymbolData, *, start_ms: int, end_ms: int) ->
                             take_profit_1=plan["take_profit_1"],
                             take_profit_2=plan["take_profit_2"],
                         )
-                        simulate_trade(trade, sorted_klines[idx:], max_candles=_MAX_HOLD_CANDLES)
+                        simulate_trade(trade, sorted_klines[idx:], max_candles=max_hold_candles)
                         trades.append(trade)
                         last_alert[direction] = ts
 
-        ts += _STEP_MS
+        ts += step_ms
 
     return trades
+
+
+def _in_session(
+    ts_ms: int,
+    *,
+    timezone: str,
+    start_hour: int | None,
+    end_hour: int | None,
+) -> bool:
+    if start_hour is None and end_hour is None:
+        return True
+    if start_hour is None or end_hour is None:
+        return True
+
+    hour = datetime.fromtimestamp(ts_ms / 1000, UTC).astimezone(ZoneInfo(timezone)).hour
+    if start_hour == end_hour:
+        return True
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour
 
 
 def _price_direction(window: list[list[Any]]) -> int:

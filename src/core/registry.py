@@ -23,7 +23,7 @@ class StrategyScheduler(BaseScheduler):
             scheduler.add_job(
                 self.execute_async_job,
                 "cron",
-                minute="*/5",
+                minute=1,
                 second=10,
                 args=[FiveFactor],
             )

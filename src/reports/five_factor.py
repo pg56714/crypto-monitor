@@ -15,6 +15,7 @@ def format_five_factor_alert(signals: list[dict[str, Any]]) -> str | None:
         block = [
             "```",
             f"{signal['symbol']} | {signal['verdict']} | 分數 {int(signal['score']):+d}",
+            f"週期：{signal.get('timeframe', 'n/a')}",
             f"目前價格：{format_price(_get_float(signal, 'current_price'))}",
             f"資金費率：{_get_float(signal, 'funding_rate'):+.4%}",
             f"OI 變化：{_get_float(signal, 'oi_change_pct'):+.2f}%",

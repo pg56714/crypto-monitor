@@ -8,14 +8,13 @@ from typing import Any
 from src.backtest.data import SymbolData
 from src.backtest.trade import Trade, simulate_trade
 from src.scoring.accumulation import score_ambush_signal
+from src.scoring.entry_engine import EntryPlan, build_entry_plan
 from src.strategies.accumulation_pool import analyze_accumulation
 
 _OI_WINDOW = 7
 _MAX_HOLD_CANDLES = 240
 _STEP_MS = 3_600_000
 _DAY_MS = 86_400_000
-_STOP_BUFFER = 0.03
-_TP2_MULTIPLIER = 1.2
 
 
 def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -> list[Trade]:
@@ -88,17 +87,18 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         }
 
         signal = score_ambush_signal(scorer_input)
-        if signal is not None:
+        entry_plan = _entry_plan(signal) if signal is not None else None
+        if entry_plan is not None and entry_plan.is_valid:
             entry_ts = ts + _STEP_MS
             entry_kline = klines_1h_by_ts.get(entry_ts)
             if entry_kline is not None:
                 entry_price = float(entry_kline[1])
-                support = float(pool_entry["low_price"])
-                resistance = float(pool_entry["high_price"])
-                stop_loss = support * (1 - _STOP_BUFFER)
-                tp1 = resistance
-                tp2 = resistance * _TP2_MULTIPLIER
-                if entry_price > 0 and stop_loss > 0 and tp1 > entry_price and tp2 > tp1:
+                if (
+                    entry_price > 0
+                    and entry_plan.stop_loss > 0
+                    and entry_plan.take_profit_1 > entry_price
+                    and entry_plan.take_profit_2 > entry_plan.take_profit_1
+                ):
                     idx = bisect.bisect_left(sorted_ts_1h, entry_ts)
                     trade = Trade(
                         symbol=data.symbol,
@@ -106,9 +106,9 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
                         direction="long",
                         entry_time_ms=entry_ts,
                         entry_price=entry_price,
-                        stop_loss=stop_loss,
-                        take_profit_1=tp1,
-                        take_profit_2=tp2,
+                        stop_loss=entry_plan.stop_loss,
+                        take_profit_1=entry_plan.take_profit_1,
+                        take_profit_2=entry_plan.take_profit_2,
                     )
                     simulate_trade(trade, sorted_klines_1h[idx:], max_candles=_MAX_HOLD_CANDLES)
                     trades.append(trade)
@@ -116,6 +116,20 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         ts += _STEP_MS
 
     return trades
+
+
+def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
+    support = float(row.get("support", 0.0))
+    resistance = float(row.get("resistance", 0.0))
+    if support <= 0 or resistance <= 0:
+        return None
+    return build_entry_plan(
+        avg_whale_price=(support + resistance) / 2,
+        support=support,
+        resistance=resistance,
+        volume_spike=float(row.get("vol_breakout", 0.0)) >= 2.0,
+        whale_inflow=float(row.get("d6h", 0.0)) > 0.0,
+    )
 
 
 def _compute_d6h(oi_hist: list[dict[str, Any]], candle_end: int) -> float:
