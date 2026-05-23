@@ -52,6 +52,13 @@ uv sync
 uv run main.py
 ```
 
+## 部署
+
+```sh
+chmod +x script/deploy.sh
+./script/deploy.sh
+```
+
 ## 檢查
 
 ```sh
