@@ -4,8 +4,7 @@
     "valid_symbol": ["ALL"],
     "timeframe": "5m",
     "min_volume_usdt": 5000000,
-    "score_threshold": 3,
-    "dedup_hours": 24
+    "dedup_hours": 4
   },
   "Accumulation": {
     "enabled": true,

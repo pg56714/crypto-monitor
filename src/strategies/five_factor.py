@@ -22,11 +22,15 @@ logger = logging.getLogger(__name__)
 # The scheduler runs in one long-lived process, so module-level state persists
 # between cron invocations: previous funding rates and the dedup history.
 _funding_snapshot: dict[str, float] = {}
-_alert_history: dict[str, datetime] = {}
+_alert_history: dict[tuple[str, str], datetime] = {}
 
 _MAX_CONCURRENCY = 10
 _KLINE_LIMIT = 24
 _OI_LIMIT = 48
+_ENTRY_SCORE_MIN = 5
+_ENTRY_ZONE_PCT = 0.001
+_FALLBACK_STOP_PCT = 0.015
+_MAX_STOP_PCT = 0.08
 
 
 class FiveFactor:
@@ -36,8 +40,7 @@ class FiveFactor:
         self.config: dict[str, Any] = Config(get_notification_config_path()).get("FiveFactor", {})
         self.timeframe: str = self.config.get("timeframe", "5m")
         self.min_volume_usdt: float = float(self.config.get("min_volume_usdt", 5_000_000))
-        self.score_threshold: int = int(self.config.get("score_threshold", 2))
-        self.dedup_hours: int = int(self.config.get("dedup_hours", 24))
+        self.dedup_hours: int = int(self.config.get("dedup_hours", 4))
         self.discord = DiscordConnector()
 
     async def run(self) -> None:
@@ -69,7 +72,7 @@ class FiveFactor:
             self.discord.send_message("FIVE_FACTOR", await append_summary(message))
             now = datetime.now(UTC)
             for signal in signals:
-                _alert_history[str(signal["symbol"])] = now
+                _alert_history[(str(signal["symbol"]), str(signal["direction"]))] = now
 
     async def _resolve_symbols(self, client: BinanceFuturesClient) -> list[str]:
         """Return symbols passing the configured 24h quote-volume filter."""
@@ -99,18 +102,21 @@ class FiveFactor:
         semaphore: asyncio.Semaphore,
     ) -> dict[str, Any] | None:
         """Evaluate one symbol, skipping recent alerts and isolating errors."""
-        if self._recently_alerted(symbol):
-            return None
         async with semaphore:
             try:
-                return await self._evaluate_symbol(client, symbol)
+                signal = await self._evaluate_symbol(client, symbol)
             except Exception:  # noqa: BLE001 - isolate one symbol's failure from the scan
                 logger.exception("FiveFactor: failed to scan %s", symbol)
                 return None
+        if signal is None:
+            return None
+        if self._recently_alerted(symbol, str(signal["direction"])):
+            return None
+        return signal
 
-    def _recently_alerted(self, symbol: str) -> bool:
+    def _recently_alerted(self, symbol: str, direction: str) -> bool:
         """Return True when the symbol was alerted within the dedup window."""
-        last = _alert_history.get(symbol)
+        last = _alert_history.get((symbol, direction))
         if last is None:
             return False
         return datetime.now(UTC) - last < timedelta(hours=self.dedup_hours)
@@ -130,8 +136,9 @@ class FiveFactor:
         cvd = calculate_cvd_from_klines(klines)
         cvd_dir = direction_from_value(cvd)
         oi_dir, oi_change_pct = await self._open_interest(client, symbol)
-        funding_rate, funding_dir = await self._funding(client, symbol)
+        funding_rate, funding_dir, mark_price = await self._funding(client, symbol)
         lsr_global, lsr_account, lsr_position, lsr_dir = await self._long_short(client, symbol)
+        current_price = mark_price if mark_price > 0 else self._latest_close(klines)
 
         result = score_five_factor(
             funding_dir=funding_dir,
@@ -140,8 +147,9 @@ class FiveFactor:
             lsr_dir=lsr_dir,
             dprice_dir=dprice_dir,
         )
-        if abs(result.score) < self.score_threshold:
+        if abs(result.score) < _ENTRY_SCORE_MIN:
             return None
+        direction = "long" if result.score > 0 else "short"
 
         patterns = detect_patterns(
             funding_rate=funding_rate,
@@ -156,7 +164,14 @@ class FiveFactor:
             "symbol": symbol,
             "score": result.score,
             "verdict": result.verdict,
+            "direction": direction,
             "patterns": patterns,
+            "current_price": current_price,
+            "trade_plan": _build_trade_plan(
+                klines=klines,
+                current_price=current_price,
+                direction=direction,
+            ),
             "funding_rate": funding_rate,
             "oi_change_pct": oi_change_pct,
             "cvd": cvd,
@@ -172,6 +187,13 @@ class FiveFactor:
             return 0
         change_pct = ((latest_close - previous_close) / previous_close) * 100
         return direction_from_value(change_pct, threshold=0.3)
+
+    @staticmethod
+    def _latest_close(klines: list[list[Any]]) -> float:
+        """Return the latest kline close price."""
+        if not klines:
+            return 0.0
+        return float(klines[-1][4])
 
     async def _open_interest(self, client: BinanceFuturesClient, symbol: str) -> tuple[int, float]:
         """Return the open-interest direction and percentage change."""
@@ -189,16 +211,18 @@ class FiveFactor:
         direction, change_pct, _segments = open_interest_direction(values)
         return direction, change_pct
 
-    async def _funding(self, client: BinanceFuturesClient, symbol: str) -> tuple[float, int]:
-        """Return the current funding rate and its direction versus the last run."""
+    async def _funding(self, client: BinanceFuturesClient, symbol: str) -> tuple[float, int, float]:
+        """Return the current funding rate, direction, and mark price."""
         premium = await client.public_futures_get("/fapi/v1/premiumIndex", {"symbol": symbol})
         current = 0.0
+        mark_price = 0.0
         if isinstance(premium, dict):
             current = float(premium.get("lastFundingRate", 0.0) or 0.0)
+            mark_price = float(premium.get("markPrice", 0.0) or 0.0)
         previous = _funding_snapshot.get(symbol, current)
         _funding_snapshot[symbol] = current
         direction, _label = funding_direction(current, previous)
-        return current, direction
+        return current, direction, mark_price
 
     async def _long_short(
         self, client: BinanceFuturesClient, symbol: str
@@ -226,3 +250,83 @@ class FiveFactor:
         if isinstance(data, list) and data and isinstance(data[-1], dict):
             return float(data[-1].get("longShortRatio", 1.0) or 1.0)
         return 1.0
+
+
+def _build_trade_plan(
+    *,
+    klines: list[list[Any]],
+    current_price: float,
+    direction: str,
+) -> dict[str, float] | None:
+    """Build a simple market-entry plan from recent swing highs and lows."""
+    if current_price <= 0 or direction not in {"long", "short"}:
+        return None
+    lows = [_safe_float(row[3]) for row in klines if len(row) > 3]
+    highs = [_safe_float(row[2]) for row in klines if len(row) > 2]
+    lows = [value for value in lows if value > 0]
+    highs = [value for value in highs if value > 0]
+    if not lows or not highs:
+        return None
+
+    if direction == "long":
+        stop_loss = _select_stop(
+            current_price=current_price,
+            structural_stop=min(lows),
+            fallback_stop=current_price * (1 - _FALLBACK_STOP_PCT),
+            direction=direction,
+        )
+        risk = current_price - stop_loss
+        if risk <= 0:
+            return None
+        take_profit_1 = current_price + (risk * 2)
+        take_profit_2 = current_price + (risk * 3)
+    else:
+        stop_loss = _select_stop(
+            current_price=current_price,
+            structural_stop=max(highs),
+            fallback_stop=current_price * (1 + _FALLBACK_STOP_PCT),
+            direction=direction,
+        )
+        risk = stop_loss - current_price
+        if risk <= 0:
+            return None
+        take_profit_1 = current_price - (risk * 2)
+        take_profit_2 = current_price - (risk * 3)
+        if take_profit_1 <= 0 or take_profit_2 <= 0:
+            return None
+
+    return {
+        "entry_low": current_price * (1 - _ENTRY_ZONE_PCT),
+        "entry_high": current_price * (1 + _ENTRY_ZONE_PCT),
+        "stop_loss": stop_loss,
+        "take_profit_1": take_profit_1,
+        "take_profit_2": take_profit_2,
+        "risk_reward": 2.0,
+    }
+
+
+def _select_stop(
+    *,
+    current_price: float,
+    structural_stop: float,
+    fallback_stop: float,
+    direction: str,
+) -> float:
+    """Prefer recent swing stops, falling back when distance is not usable."""
+    if direction == "long":
+        risk_pct = (current_price - structural_stop) / current_price
+        if 0 < risk_pct <= _MAX_STOP_PCT:
+            return structural_stop
+    else:
+        risk_pct = (structural_stop - current_price) / current_price
+        if 0 < risk_pct <= _MAX_STOP_PCT:
+            return structural_stop
+    return fallback_stop
+
+
+def _safe_float(value: object) -> float:
+    """Convert numeric API values to float."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0

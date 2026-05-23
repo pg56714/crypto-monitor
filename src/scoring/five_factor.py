@@ -21,16 +21,12 @@ def score_five_factor(
 ) -> FiveFactorScore:
     """Calculate the five-factor score and verdict."""
     score = funding_dir + cvd_dir + oi_dir + lsr_dir + dprice_dir
-    if score >= 4:
-        verdict = "Entry Long"
-    elif score >= 2:
-        verdict = "Watch Long"
-    elif score <= -4:
-        verdict = "Entry Short"
-    elif score <= -2:
-        verdict = "Watch Short"
+    if score > 4:
+        verdict = "做多進場"
+    elif score < -4:
+        verdict = "做空進場"
     else:
-        verdict = "Ignore"
+        verdict = "忽略"
     return FiveFactorScore(score=score, verdict=verdict)
 
 
@@ -47,19 +43,19 @@ def detect_patterns(
     """Detect named futures signal patterns."""
     patterns: list[str] = []
     if funding_rate < 0 and cvd_dir > 0 and oi_dir > 0:
-        patterns.append("short_squeeze")
+        patterns.append("空頭擠壓")
     if funding_rate > 0 and cvd_dir < 0 and oi_dir < 0:
-        patterns.append("long_capitulation")
+        patterns.append("多頭投降")
     if dprice_dir > 0 and oi_dir > 0 and lsr_global > 1:
-        patterns.append("healthy_up")
+        patterns.append("健康上漲")
     elif dprice_dir > 0 and oi_dir < 0 and lsr_global > 1:
-        patterns.append("exhaust_up")
+        patterns.append("上漲衰竭")
     elif dprice_dir < 0 and oi_dir > 0 and lsr_global < 1:
-        patterns.append("healthy_down")
+        patterns.append("健康下跌")
     elif dprice_dir < 0 and oi_dir < 0 and lsr_global > 1:
-        patterns.append("long_capitulate")
+        patterns.append("多頭投降")
     if lsr_account < 1 and lsr_position > 2:
-        patterns.append("counter_whale")
+        patterns.append("巨鯨逆勢偏多")
     if lsr_account > 2 and lsr_position < 1:
-        patterns.append("cautious_whale")
-    return patterns
+        patterns.append("巨鯨謹慎偏空")
+    return list(dict.fromkeys(patterns))
