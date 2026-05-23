@@ -21,9 +21,9 @@ def score_five_factor(
 ) -> FiveFactorScore:
     """Calculate the five-factor score and verdict."""
     score = funding_dir + cvd_dir + oi_dir + lsr_dir + dprice_dir
-    if score > 4:
+    if score >= 4:
         verdict = "做多進場"
-    elif score < -4:
+    elif score <= -4:
         verdict = "做空進場"
     else:
         verdict = "忽略"

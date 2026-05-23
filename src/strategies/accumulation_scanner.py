@@ -58,7 +58,8 @@ class AccumulationScanner:
         ambush = [r for s in records if (r := score_ambush_signal(s)) is not None]
         for row in ambush:
             row["entry_plan"] = _entry_plan(row)
-        message = format_accumulation_scan(ambush=ambush)
+        actionable = [row for row in ambush if row.get("entry_plan") is not None]
+        message = format_accumulation_scan(ambush=actionable)
         if message:
             self.discord.send_message("ACCUMULATION", message)
 

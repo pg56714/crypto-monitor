@@ -18,12 +18,14 @@ def format_accumulation_pool(results: list[dict[str, Any]]) -> str:
     rows: list[tuple[str, ...]] = []
     for item in results[:_POOL_LIMIT]:
         try:
-            rows.append((
-                str(item["coin"]),
-                f"{float(item['score']):.0f}",
-                f"{float(item['sideways_days']):.0f} 天",
-                format_usd(float(item["avg_vol"])),
-            ))
+            rows.append(
+                (
+                    str(item["coin"]),
+                    f"{float(item['score']):.0f}",
+                    f"{float(item['sideways_days']):.0f} 天",
+                    format_usd(float(item["avg_vol"])),
+                )
+            )
         except (KeyError, TypeError, ValueError):
             continue
     if not rows:
@@ -41,7 +43,7 @@ def format_accumulation_scan(
     sorted_rows = _sorted_scan_rows(ambush)
     if not sorted_rows:
         return None
-    lines = [f"埋伏候選 Top {_SCAN_LIMIT}", "```text"]
+    lines = [f"埋伏候選 Top {len(sorted_rows)}", "```text"]
     rows = [
         (
             str(item["coin"]),
@@ -77,13 +79,16 @@ def _sorted_scan_rows(ambush: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _format_entry_plan(plan: EntryPlan) -> str:
-    """Render an entry plan as a single indented Discord line."""
-    return (
-        f"    進場區 {format_price(plan.entry_low)} ~ {format_price(plan.entry_high)}"
-        f" | 停損 {format_price(plan.stop_loss)}"
-        f" | 目標 {format_price(plan.take_profit_1)} / {format_price(plan.take_profit_2)}"
-        f" | 風報比 {plan.risk_reward:.1f}"
+    """Render entry plan as two compact indented lines that fit Discord mobile width."""
+    line1 = (
+        f"  進 {format_price(plan.entry_low)}~{format_price(plan.entry_high)}"
+        f"  停 {format_price(plan.stop_loss)}"
     )
+    line2 = (
+        f"  目 {format_price(plan.take_profit_1)}/{format_price(plan.take_profit_2)}"
+        f"  RR {plan.risk_reward:.1f}"
+    )
+    return f"{line1}\n{line2}"
 
 
 def _format_table(title: str, headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
@@ -119,6 +124,7 @@ def _column_widths(headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> lis
 
 def _format_row(row: tuple[str, ...], widths: list[int]) -> str:
     """Format one fixed-width row using display width for padding."""
+
     def _ljust(text: str, width: int) -> str:
         return text + " " * max(0, width - _dw(text))
 

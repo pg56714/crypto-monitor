@@ -4,7 +4,9 @@ dependencies = [
   "apscheduler>=3.11.0",
   "ccxt>=4.5.10",
   "discord>=2.3.2",
+  "polars>=1.0",
   "python-dotenv>=1.1.1",
+  "quantstats>=0.0.62",
 ]
 description = "Add your description here"
 name = "crypto-monitor"
