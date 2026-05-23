@@ -1,6 +1,6 @@
-# crypto-notifier
+# crypto-monitor
 
-`crypto-notifier` 是以 APScheduler、ccxt async、polars 與 Discord webhook 為核心的加密貨幣策略通知服務。
+`crypto-monitor` 是以 APScheduler、ccxt async、polars 與 Discord webhook 為核心的加密貨幣策略通知服務。
 
 策略流程放在 `src/strategies/`，共用的資料、指標、評分與報告邏輯分層放在對應目錄。
 

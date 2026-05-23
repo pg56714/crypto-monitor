@@ -1,6 +1,6 @@
 # 策略說明
 
-crypto-notifier 共有 2 個策略,流程放在 `src/strategies/`,排程註冊於 `src/core/registry.py`,各自的設定在 `src/config/notification.json`(以區塊內的 `enabled` 開關)。APScheduler 以 UTC 排程。
+crypto-monitor 共有 2 個策略,流程放在 `src/strategies/`,排程註冊於 `src/core/registry.py`,各自的設定在 `src/config/notification.json`(以區塊內的 `enabled` 開關)。APScheduler 以 UTC 排程。
 
 > 2 個策略預設 `enabled: false`,各自實機驗證後再於 `notification.json` 開啟。若設定 OpenRouter 金鑰,各策略推播會自動附上一段 AI 摘要(無金鑰則略過)。
 
