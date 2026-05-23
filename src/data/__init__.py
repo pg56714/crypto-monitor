@@ -1,1 +1,0 @@
-"""Normalized internal data models."""

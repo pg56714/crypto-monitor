@@ -12,7 +12,6 @@
     "timeframe": "1d",
     "lookback_days": 180,
     "min_sideways_days": 45,
-    "period": "1h",
-    "min_oi_delta_pct": 3
+    "period": "1h"
   }
 }

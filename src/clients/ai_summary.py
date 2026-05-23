@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def get_openrouter_client() -> OpenRouterClient | None:
     """Create an OpenRouter client when credentials are configured."""
-    if not Env.OPENROUTER_API_KEY or not Env.OPENROUTER_MODEL:
+    if not Env.OPENROUTER_API_KEY:
         return None
     return OpenRouterClient(Env.OPENROUTER_API_KEY, Env.OPENROUTER_MODEL)
 

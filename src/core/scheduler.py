@@ -37,16 +37,16 @@ class BaseScheduler:
     def __init__(self) -> None:
         self.discord = DiscordConnector()
 
-    def _format_error_message(self, job_class: type[object], exception: Exception) -> str:
+    def _format_error_message(self, job_class: type[object]) -> str:
         """Construct a formatted Discord message for job failures."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         traceback_snippet = traceback.format_exc()[-1900:]
-        return f"```Error: {job_class.__name__} failed at {timestamp}\n{traceback_snippet}\n```"
+        return f"[monitor] {job_class.__name__} error at {timestamp}\n```{traceback_snippet}\n```"
 
     def execute_async_job(self, job_class: type[AsyncJob], channel: str = "CRITICAL") -> None:
         """Run an asynchronous job and report failures to Discord."""
         try:
             asyncio.run(job_class().run())
-        except Exception as exc:  # noqa: BLE001 - capture all to notify operators
-            message = self._format_error_message(job_class, exc)
+        except Exception:  # noqa: BLE001 - capture all to notify operators
+            message = self._format_error_message(job_class)
             self.discord.send_message(channel, message)

@@ -9,7 +9,6 @@
 | `clients/` | 外部 API client。Binance、CoinGecko、OpenRouter 等都放這裡。 |
 | `config/` | 環境變數讀取與策略設定。 |
 | `core/` | scheduler、registry、Discord 輸出、共用 config 與路徑。 |
-| `data/` | 資料模型。 |
 | `indicators/` | 可重用指標計算，例如 OI、Funding、CVD、LSR、Volatility。 |
 | `reports/` | 各策略的訊息格式與報告渲染。 |
 | `scoring/` | 各策略評分公式與跨策略 entry engine。 |
@@ -53,4 +52,4 @@ src/clients/openrouter.py
 src/clients/ai_summary.py
 ```
 
-OpenRouter 需要 `OPENROUTER_API_KEY` 與 `OPENROUTER_MODEL`。沒有設定時，AI 摘要層會回傳 `None`，策略應自然省略 AI 段落。
+OpenRouter 需要 `OPENROUTER_API_KEY`。`OPENROUTER_MODEL` 預設 `openrouter/free`，沒有 API key 時，AI 摘要層會回傳 `None`，策略應自然省略 AI 段落。

@@ -8,6 +8,11 @@ cd "$SCRIPT_DIR/.."
 echo "🚀 Starting deployment at $(date)"
 echo "📂 Working directory: $(pwd)"
 
+if [ ! -f .env ]; then
+    echo "❌ Missing .env file. Create one from .env.sample before deploying."
+    exit 1
+fi
+
 # Step 1: Build new image with a temporary tag
 echo "📦 Building new image..."
 docker build --no-cache -t crypto-monitor:new .
@@ -21,7 +26,7 @@ fi
 
 # Step 3: Start new container
 echo "▶️ Starting new container..."
-docker run -d --name crypto-monitor --restart unless-stopped crypto-monitor:new
+docker run -d --name crypto-monitor --restart unless-stopped --env-file .env crypto-monitor:new
 
 # Step 4: Wait a moment for container to start
 sleep 5

@@ -14,16 +14,6 @@ class BinanceFuturesClient:
         """Close the underlying ccxt session."""
         await self.exchange.close()
 
-    async def fetch_ohlcv(
-        self,
-        symbol: str,
-        timeframe: str,
-        *,
-        limit: int = 100,
-    ) -> list[list[float | int]]:
-        """Fetch OHLCV candles through ccxt."""
-        return await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-
     async def fetch_all_usdt_perp_symbols(self) -> list[str]:
         """Load all active linear USDT perpetual symbols."""
         await self.exchange.load_markets()

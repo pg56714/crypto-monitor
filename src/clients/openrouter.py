@@ -21,9 +21,7 @@ class OpenRouterClient:
             "messages": [{"role": "user", "content": prompt}],
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload, timeout=30
-            ) as response:
+            async with session.post(url, headers=headers, json=payload, timeout=30) as response:
                 response.raise_for_status()
                 data = await response.json()
 

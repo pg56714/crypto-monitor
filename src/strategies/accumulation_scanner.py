@@ -130,7 +130,6 @@ class AccumulationScanner:
             "in_pool": pool_entry is not None,
             "support": float(pool_entry["low_price"]) if pool_entry else 0.0,
             "resistance": float(pool_entry["high_price"]) if pool_entry else 0.0,
-            "ref_price": float(pool_entry["current_price"]) if pool_entry else 0.0,
             "vol_breakout": float(pool_entry["vol_breakout"]) if pool_entry else 0.0,
         }
 
@@ -172,7 +171,6 @@ def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
     if support <= 0 or resistance <= 0:
         return None
     return build_entry_plan(
-        price=float(row.get("ref_price", 0.0)),
         avg_whale_price=(support + resistance) / 2,
         support=support,
         resistance=resistance,
