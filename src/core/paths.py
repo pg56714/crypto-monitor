@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT: Path = Path(__file__).resolve().parents[2]
 CONFIG_DIR: Path = ROOT / "src" / "config"
+
 NOTIFICATION_CONFIG_PATH: Path = CONFIG_DIR / "notification.json"
 
 

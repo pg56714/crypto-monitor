@@ -4,8 +4,8 @@ import logging
 import time
 
 from src.core.discord import DiscordConnector
+from src.core.registry import StrategyScheduler
 from src.core.scheduler import scheduler
-from src.notifier.scheduler import NotificationScheduler
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     except Exception:
         logger.exception("Failed to send boot check message.")
 
-    NotificationScheduler().schedule()
+    StrategyScheduler().schedule()
 
     scheduler.start()
 

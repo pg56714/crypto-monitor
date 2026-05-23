@@ -1,19 +1,18 @@
 {
-  "VolumeBomb": {
-    "valid_symbol": [
-      "BTCUSDT",
-      "ETHUSDT",
-      "BNBUSDT",
-      "SOLUSDT",
-      "ADAUSDT",
-      "XRPUSDT",
-      "DOGEUSDT",
-      "SUIUSDT"
-    ],
-    "timeframe": "5m"
-  },
-  "OI": {
+  "FiveFactor": {
+    "enabled": true,
     "valid_symbol": ["ALL"],
-    "timeframe": "5m"
+    "timeframe": "5m",
+    "min_volume_usdt": 5000000,
+    "score_threshold": 3,
+    "dedup_hours": 24
+  },
+  "Accumulation": {
+    "enabled": true,
+    "timeframe": "1d",
+    "lookback_days": 180,
+    "min_sideways_days": 45,
+    "period": "1h",
+    "min_oi_delta_pct": 3
   }
 }

@@ -2,7 +2,7 @@
 
 import asyncio
 import traceback
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from apscheduler.executors.pool import ThreadPoolExecutor
@@ -20,14 +20,8 @@ job_defaults = {
 scheduler = BackgroundScheduler(
     job_defaults=job_defaults,
     executors=executors,
+    timezone=UTC,
 )
-
-
-class SyncJob(Protocol):
-    """Protocol representing a synchronous job."""
-
-    def run(self) -> None:
-        """Execute the job."""
 
 
 class AsyncJob(Protocol):
@@ -48,14 +42,6 @@ class BaseScheduler:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         traceback_snippet = traceback.format_exc()[-1900:]
         return f"```Error: {job_class.__name__} failed at {timestamp}\n{traceback_snippet}\n```"
-
-    def execute_sync_job(self, job_class: type[SyncJob], channel: str = "CRITICAL") -> None:
-        """Run a synchronous job and report failures to Discord."""
-        try:
-            job_class().run()
-        except Exception as exc:  # noqa: BLE001 - capture all to notify operators
-            message = self._format_error_message(job_class, exc)
-            self.discord.send_message(channel, message)
 
     def execute_async_job(self, job_class: type[AsyncJob], channel: str = "CRITICAL") -> None:
         """Run an asynchronous job and report failures to Discord."""

@@ -58,19 +58,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"src/bot/discord.py" = [
-  "D", # Connector uses descriptive method names instead of docstrings
-]
-"src/strategy/*" = [
-  "ANN", # Legacy strategy modules lack type annotations
-  "D", # Legacy strategy modules lack comprehensive docstrings
-]
-"src/tools/*" = [
-  "D", # CLI utilities kept intentionally lightweight
-]
-"src/tracker/*" = [
-  "D", # Tracker scripts prioritise runtime output over docstrings
-]
 "tests/*" = [
   "S101", # Allow use of assert statements in tests
   "S105", # hardcoded-password-string
