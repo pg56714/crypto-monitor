@@ -32,7 +32,7 @@ class AsyncJob(Protocol):
 
 
 class BaseScheduler:
-    """Shared helpers for scheduling notifier jobs and dispatching errors."""
+    """Shared helpers for scheduling monitor jobs and dispatching errors."""
 
     def __init__(self) -> None:
         self.discord = DiscordConnector()
