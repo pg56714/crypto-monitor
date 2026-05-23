@@ -13,7 +13,7 @@ def segment_averages(values: list[float], *, segment_count: int = 4) -> list[flo
     segments: list[float] = []
     for index in range(segment_count):
         start = index * segment_size
-        end = start + segment_size
+        end = start + segment_size if index < segment_count - 1 else len(values)
         segment = values[start:end]
         segments.append(sum(segment) / len(segment))
     return segments
