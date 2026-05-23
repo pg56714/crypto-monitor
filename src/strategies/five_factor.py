@@ -5,7 +5,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.clients.ai_summary import append_summary
 from src.clients.binance import BinanceFuturesClient
 from src.core.config_reader import Config
 from src.core.discord import DiscordConnector
@@ -69,7 +68,7 @@ class FiveFactor:
 
         message = format_five_factor_alert(signals)
         if message:
-            self.discord.send_message("FIVE_FACTOR", await append_summary(message))
+            self.discord.send_message("FIVE_FACTOR", message)
             now = datetime.now(UTC)
             for signal in signals:
                 _alert_history[(str(signal["symbol"]), str(signal["direction"]))] = now

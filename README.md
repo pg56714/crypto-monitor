@@ -8,7 +8,7 @@
 
 ```text
 src/
-├── clients/        # Binance、CoinGecko、OpenRouter 等外部 API client
+├── clients/        # Binance、CoinGecko 等外部 API client
 ├── config/         # env 與 notification.json
 ├── core/           # scheduler、registry、Discord 輸出、共用設定與路徑
 ├── indicators/     # OI、Funding、CVD、LSR、Volatility
@@ -32,8 +32,6 @@ DISCORD_CHANNEL_TEST=
 DISCORD_CHANNEL_CRITICAL=
 DISCORD_CHANNEL_ACCUMULATION=
 DISCORD_CHANNEL_FIVE_FACTOR=
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=openrouter/free
 ```
 
 `DISCORD_CHANNEL_TEST` 是啟動檢查頻道。程式啟動時會先送出 boot check 訊息，用來確認 Discord webhook 與通知管線可用。
@@ -41,8 +39,6 @@ OPENROUTER_MODEL=openrouter/free
 `DISCORD_CHANNEL_CRITICAL` 是監控錯誤頻道。排程工作發生未捕捉例外時，錯誤會送到此頻道，訊息開頭格式為 `[monitor] <JobName> error at <timestamp>`，後面附上 traceback 摘要。
 
 `DISCORD_CHANNEL_ACCUMULATION` 與 `DISCORD_CHANNEL_FIVE_FACTOR` 是策略輸出頻道；只有在 `src/config/notification.json` 內對應策略 `enabled: true` 時才是啟動必要環境變數。
-
-OpenRouter 是可選功能，沒有 `OPENROUTER_API_KEY` 時不會啟用 AI 摘要。`OPENROUTER_MODEL` 預設 `openrouter/free`（只路由免費模型），可改成 [openrouter.ai/models](https://openrouter.ai/models) 上任一 model id。
 
 ## 安裝與執行
 

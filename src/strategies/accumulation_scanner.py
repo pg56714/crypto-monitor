@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Any
 
-from src.clients.ai_summary import append_summary
 from src.clients.binance import BinanceFuturesClient
 from src.clients.coingecko import fetch_market_caps
 from src.core.config_reader import Config
@@ -61,7 +60,7 @@ class AccumulationScanner:
             row["entry_plan"] = _entry_plan(row)
         message = format_accumulation_scan(ambush=ambush)
         if message:
-            self.discord.send_message("ACCUMULATION", await append_summary(message))
+            self.discord.send_message("ACCUMULATION", message)
 
     @staticmethod
     def _ticker_map(tickers: object) -> dict[str, dict[str, Any]]:

@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Any
 
-from src.clients.ai_summary import append_summary
 from src.clients.binance import BinanceFuturesClient
 from src.core.config_reader import Config
 from src.core.discord import DiscordConnector
@@ -176,7 +175,7 @@ class AccumulationPool:
         results.sort(key=lambda item: float(item["score"]), reverse=True)
         POOL.clear()
         POOL.update({str(item["symbol"]): item for item in results})
-        message = await append_summary(format_accumulation_pool(results))
+        message = format_accumulation_pool(results)
         self.discord.send_message("ACCUMULATION", message)
 
     async def _scan_symbol(
