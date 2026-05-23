@@ -23,4 +23,4 @@ ENV PATH="/code/.venv/bin:$PATH"
 # Run through uv to keep runtime behavior aligned with local execution
 ENTRYPOINT []
 
-CMD ["uv", "run", "main.py"]
+CMD ["uv", "run", "--locked", "--no-dev", "main.py"]
