@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_CONCURRENCY = 10
 _OI_LIMIT = 7
+_AMBUSH_POOL_LIMIT = 20
 
 
 class AccumulationScanner:
@@ -76,8 +77,9 @@ class AccumulationScanner:
 
     @staticmethod
     def _select_symbols(ticker_map: dict[str, dict[str, Any]]) -> list[str]:
-        """Return pooled symbols that are still present in the ticker payload."""
-        return [symbol for symbol in POOL if symbol in ticker_map]
+        """Return the top-N pooled symbols (by score) that are present in the ticker payload."""
+        top_symbols = list(POOL.keys())[:_AMBUSH_POOL_LIMIT]
+        return [symbol for symbol in top_symbols if symbol in ticker_map]
 
     async def _safe_market_caps(self) -> dict[str, float]:
         """Fetch CoinGecko market caps, tolerating failure."""
