@@ -19,7 +19,10 @@ class Env:
     DISCORD_CHANNEL_ACCUMULATION: Final[str | None] = os.getenv("DISCORD_CHANNEL_ACCUMULATION")
     DISCORD_CHANNEL_FIVE_FACTOR: Final[str | None] = os.getenv("DISCORD_CHANNEL_FIVE_FACTOR")
     OPENROUTER_API_KEY: Final[str | None] = os.getenv("OPENROUTER_API_KEY")
-    OPENROUTER_MODEL: Final[str] = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    OPENROUTER_MODEL: Final[str] = os.getenv(
+        "OPENROUTER_MODEL",
+        "openai/gpt-oss-120b:free",
+    )
 
     @classmethod
     def validate(cls) -> None:
