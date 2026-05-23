@@ -17,7 +17,9 @@ if __name__ == "__main__":
     except Exception:
         logger.exception("Failed to send boot check message.")
 
-    StrategyScheduler().schedule()
+    strategy_scheduler = StrategyScheduler()
+    strategy_scheduler.schedule()
+    strategy_scheduler.bootstrap()
 
     scheduler.start()
 

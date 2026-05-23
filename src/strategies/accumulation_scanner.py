@@ -11,23 +11,18 @@ from src.core.config_reader import Config
 from src.core.discord import DiscordConnector
 from src.core.paths import get_notification_config_path
 from src.reports.accumulation import format_accumulation_scan
-from src.scoring.accumulation import (
-    score_ambush_signal,
-    score_chase_signal,
-    score_combined_signal,
-)
+from src.scoring.accumulation import score_ambush_signal
 from src.scoring.entry_engine import EntryPlan, build_entry_plan
 from src.strategies.accumulation_pool import POOL
 
 logger = logging.getLogger(__name__)
 
-_TOP_N = 100
 _MAX_CONCURRENCY = 10
 _OI_LIMIT = 7
 
 
 class AccumulationScanner:
-    """Hourly OI-movement scanner scoring the accumulation pool and top market."""
+    """Hourly OI-movement scanner scoring pooled ambush candidates."""
 
     def __init__(self) -> None:
         notification_config = Config(get_notification_config_path())
@@ -36,8 +31,11 @@ class AccumulationScanner:
         self.discord = DiscordConnector()
 
     async def run(self) -> None:
-        """Scan pool + top symbols for OI moves, run the three scorers, notify."""
+        """Scan pooled symbols for OI moves, run the ambush scorer, and notify."""
         if not self.config.get("enabled", False):
+            return
+        if not POOL:
+            logger.info("AccumulationScanner: pool is empty; skip ambush scan")
             return
 
         client = BinanceFuturesClient()
@@ -58,12 +56,10 @@ class AccumulationScanner:
             await client.close()
 
         records = [row for row in rows if isinstance(row, dict)]
-        chase = [r for s in records if (r := score_chase_signal(s)) is not None]
-        combined = [r for s in records if (r := score_combined_signal(s)) is not None]
         ambush = [r for s in records if (r := score_ambush_signal(s)) is not None]
         for row in ambush:
             row["entry_plan"] = _entry_plan(row)
-        message = format_accumulation_scan(chase=chase, combined=combined, ambush=ambush)
+        message = format_accumulation_scan(ambush=ambush)
         if message:
             self.discord.send_message("ACCUMULATION", await append_summary(message))
 
@@ -80,13 +76,8 @@ class AccumulationScanner:
 
     @staticmethod
     def _select_symbols(ticker_map: dict[str, dict[str, Any]]) -> list[str]:
-        """Return pool symbols plus the top USDT perps by 24h quote volume."""
-        usdt = [symbol for symbol in ticker_map if symbol.endswith("USDT")]
-        usdt.sort(
-            key=lambda symbol: float(ticker_map[symbol].get("quoteVolume", 0.0) or 0.0),
-            reverse=True,
-        )
-        return list(dict.fromkeys([*POOL, *usdt[:_TOP_N]]))
+        """Return pooled symbols that are still present in the ticker payload."""
+        return [symbol for symbol in POOL if symbol in ticker_map]
 
     async def _safe_market_caps(self) -> dict[str, float]:
         """Fetch CoinGecko market caps, tolerating failure."""

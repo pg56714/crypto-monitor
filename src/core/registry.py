@@ -5,7 +5,7 @@ from typing import Any
 from src.core.config_reader import Config
 from src.core.paths import get_notification_config_path
 from src.core.scheduler import BaseScheduler, scheduler
-from src.strategies.accumulation_pool import AccumulationPool
+from src.strategies.accumulation_pool import POOL, AccumulationPool
 from src.strategies.accumulation_scanner import AccumulationScanner
 from src.strategies.five_factor import FiveFactor
 
@@ -43,6 +43,11 @@ class StrategyScheduler(BaseScheduler):
                 second=0,
                 args=[AccumulationScanner],
             )
+
+    def bootstrap(self) -> None:
+        """Initialize process-local strategy state before scheduled scans begin."""
+        if self._is_enabled("Accumulation") and not POOL:
+            self.execute_async_job(AccumulationPool)
 
     def _is_enabled(self, strategy_name: str, *, default: bool = False) -> bool:
         """Return whether a strategy is enabled in notification configuration."""

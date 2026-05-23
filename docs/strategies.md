@@ -7,10 +7,11 @@ crypto-monitor 目前包含兩組策略，排程入口在 `src/core/registry.py`
 
 Accumulation 用來尋找長時間盤整、資金費率與 OI 開始出現異動的標的。它分成兩個排程：
 
+- 啟動初始化：程式啟動且 `Accumulation` 啟用時，若行程內 `POOL` 尚未建立，會先執行一次 `AccumulationPool`。
 - `AccumulationPool`：每日更新收籌標的池。
-- `AccumulationScanner`：每小時掃描標的池與高成交量市場，輸出追價、共振、埋伏三類結果。
+- `AccumulationScanner`：每小時只掃描標的池，輸出埋伏候選。
 
-埋伏類訊號會在條件足夠時附上進場區、停損、目標與風報比。
+`#accumulation` 頻道已代表策略類型，因此推播內容不再附加「埋伏」區塊標題。訊號會在條件足夠時附上進場區、停損、目標與風報比。短線追價與共振類訊號由 FiveFactor 負責。
 
 ## 2. FiveFactor
 

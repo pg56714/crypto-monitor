@@ -70,4 +70,6 @@ uv run ruff format --check .
 
 APScheduler 目前明確使用 UTC。`AccumulationPool` 排程在 `18:00 UTC`，對應台北時間隔日 `02:00`。
 
+程式啟動時若 `Accumulation` 啟用且行程內 `POOL` 尚未建立，會先執行一次 `AccumulationPool`，讓後續每小時的收籌掃描有標的池可用。`AccumulationScanner` 只掃描 `POOL` 內標的並輸出埋伏候選。
+
 `src/core/registry.py` 的 `schedule()` 讀取 `src/config/notification.json` 的 `enabled` 欄位，只註冊 `enabled: true` 的策略。
