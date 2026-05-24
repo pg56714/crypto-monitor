@@ -80,15 +80,12 @@ def _sorted_scan_rows(ambush: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _format_entry_plan(plan: EntryPlan) -> str:
     """Render entry plan as two compact indented lines that fit Discord mobile width."""
-    line1 = (
-        f"  Entry {format_price(plan.entry_low)}~{format_price(plan.entry_high)}"
-        f"  SL {format_price(plan.stop_loss)}"
-    )
-    line2 = (
+    line1 = f"  Limit {format_price(plan.limit_price)}  Valid {plan.entry_wait_hours}h"
+    line2 = f"  SL {format_price(plan.stop_loss)}"
+    line3 = (
         f"  TP {format_price(plan.take_profit_1)}/{format_price(plan.take_profit_2)}"
         f"  RR {plan.risk_reward:.1f}"
     )
-    line3 = f"  Limit valid {plan.entry_wait_hours}h"
     return f"{line1}\n{line2}\n{line3}"
 
 

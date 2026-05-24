@@ -11,7 +11,7 @@ from src.core.discord import DiscordConnector
 from src.core.paths import get_notification_config_path
 from src.reports.accumulation import format_accumulation_scan
 from src.scoring.accumulation import score_ambush_signal
-from src.scoring.entry_engine import EntryPlan, build_entry_plan
+from src.scoring.entry_engine import EntryPlan, build_entry_plan, entry_momentum_is_valid
 from src.strategies.accumulation_pool import POOL
 
 logger = logging.getLogger(__name__)
@@ -166,6 +166,8 @@ def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
     support = float(row.get("support", 0.0))
     resistance = float(row.get("resistance", 0.0))
     if support <= 0 or resistance <= 0:
+        return None
+    if not entry_momentum_is_valid(float(row.get("px_chg", 0.0))):
         return None
     return build_entry_plan(
         avg_whale_price=(support + resistance) / 2,

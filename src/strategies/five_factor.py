@@ -257,7 +257,7 @@ def _build_trade_plan(
     klines: list[list[Any]],
     current_price: float,
     direction: str,
-) -> dict[str, float] | None:
+) -> dict[str, Any] | None:
     """Build a simple market-entry plan from recent swing highs and lows."""
     if current_price <= 0 or direction not in {"long", "short"}:
         return None
@@ -296,6 +296,8 @@ def _build_trade_plan(
             return None
 
     return {
+        "entry_type": "market",
+        "entry_price": current_price,
         "entry_low": current_price * (1 - _ENTRY_ZONE_PCT),
         "entry_high": current_price * (1 + _ENTRY_ZONE_PCT),
         "stop_loss": stop_loss,

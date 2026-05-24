@@ -20,6 +20,7 @@ from src.core.paths import get_notification_config_path
 
 _STEP_MS = 3_600_000
 _DAY_MS = 86_400_000
+_ACC_POOL_LOOKBACK_DAYS = 240
 
 
 async def _run(
@@ -45,7 +46,7 @@ async def _run(
     base_time_ms = server_time_ms if server_time_ms > 0 else local_time_ms
     end_ms = (base_time_ms // _STEP_MS) * _STEP_MS
     start_ms = end_ms - days * 24 * _STEP_MS
-    daily_start_ms = end_ms - 240 * _DAY_MS
+    daily_start_ms = end_ms - _ACC_POOL_LOOKBACK_DAYS * _DAY_MS
 
     if not symbols:
         print(f"抓取前 {top_n} 大交易量幣種...")

@@ -11,8 +11,11 @@ from src.scoring.accumulation import score_ambush_signal
 from src.scoring.entry_engine import (
     DEFAULT_ENTRY_WAIT_HOURS,
     DEFAULT_MIN_RISK_REWARD,
+    RISK_REWARD_EPSILON,
     EntryPlan,
     build_entry_plan,
+    calculate_risk_reward,
+    entry_momentum_is_valid,
 )
 from src.strategies.accumulation_pool import analyze_accumulation
 
@@ -96,7 +99,7 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         signal = score_ambush_signal(scorer_input)
         entry_plan = _entry_plan(signal) if signal is not None else None
         if entry_plan is not None and entry_plan.is_valid:
-            fill = _find_entry_fill(sorted_ts_1h, sorted_klines_1h, ts + _STEP_MS, entry_plan)
+            fill = _find_limit_entry_fill(sorted_ts_1h, sorted_klines_1h, ts + _STEP_MS, entry_plan)
             if fill is not None:
                 idx, entry_ts, entry_price = fill
                 if (
@@ -104,7 +107,10 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
                     and entry_plan.stop_loss > 0
                     and entry_plan.take_profit_1 > entry_price
                     and entry_plan.take_profit_2 > entry_plan.take_profit_1
-                    and _risk_reward(entry_price, entry_plan.stop_loss, entry_plan.take_profit_1)
+                    and calculate_risk_reward(
+                        entry_price, entry_plan.stop_loss, entry_plan.take_profit_1
+                    )
+                    + RISK_REWARD_EPSILON
                     >= _MIN_ENTRY_RISK_REWARD
                 ):
                     trade = Trade(
@@ -125,7 +131,7 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
     return trades
 
 
-def _find_entry_fill(
+def _find_limit_entry_fill(
     sorted_ts: list[int],
     sorted_klines: list[list[Any]],
     start_ts: int,
@@ -138,26 +144,21 @@ def _find_entry_fill(
         if len(candle) < 4:
             continue
         open_price = float(candle[1])
-        high = float(candle[2])
         low = float(candle[3])
-        if low <= entry_plan.entry_high and high >= entry_plan.entry_low:
-            entry_price = min(max(open_price, entry_plan.entry_low), entry_plan.entry_high)
+        if low <= entry_plan.limit_price:
+            entry_price = min(open_price, entry_plan.limit_price)
+            if entry_price <= entry_plan.stop_loss:
+                return None
             return idx, int(candle[0]), entry_price
     return None
-
-
-def _risk_reward(entry_price: float, stop_loss: float, take_profit: float) -> float:
-    risk = entry_price - stop_loss
-    reward = take_profit - entry_price
-    if risk <= 0:
-        return 0.0
-    return reward / risk
 
 
 def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
     support = float(row.get("support", 0.0))
     resistance = float(row.get("resistance", 0.0))
     if support <= 0 or resistance <= 0:
+        return None
+    if not entry_momentum_is_valid(float(row.get("px_chg", 0.0))):
         return None
     return build_entry_plan(
         avg_whale_price=(support + resistance) / 2,
