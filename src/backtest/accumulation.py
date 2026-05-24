@@ -8,11 +8,18 @@ from typing import Any
 from src.backtest.data import SymbolData
 from src.backtest.trade import Trade, simulate_trade
 from src.scoring.accumulation import score_ambush_signal
-from src.scoring.entry_engine import EntryPlan, build_entry_plan
+from src.scoring.entry_engine import (
+    DEFAULT_ENTRY_WAIT_HOURS,
+    DEFAULT_MIN_RISK_REWARD,
+    EntryPlan,
+    build_entry_plan,
+)
 from src.strategies.accumulation_pool import analyze_accumulation
 
 _OI_WINDOW = 7
 _MAX_HOLD_CANDLES = 240
+_ENTRY_WAIT_CANDLES = DEFAULT_ENTRY_WAIT_HOURS
+_MIN_ENTRY_RISK_REWARD = DEFAULT_MIN_RISK_REWARD
 _STEP_MS = 3_600_000
 _DAY_MS = 86_400_000
 
@@ -89,17 +96,17 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         signal = score_ambush_signal(scorer_input)
         entry_plan = _entry_plan(signal) if signal is not None else None
         if entry_plan is not None and entry_plan.is_valid:
-            entry_ts = ts + _STEP_MS
-            entry_kline = klines_1h_by_ts.get(entry_ts)
-            if entry_kline is not None:
-                entry_price = float(entry_kline[1])
+            fill = _find_entry_fill(sorted_ts_1h, sorted_klines_1h, ts + _STEP_MS, entry_plan)
+            if fill is not None:
+                idx, entry_ts, entry_price = fill
                 if (
                     entry_price > 0
                     and entry_plan.stop_loss > 0
                     and entry_plan.take_profit_1 > entry_price
                     and entry_plan.take_profit_2 > entry_plan.take_profit_1
+                    and _risk_reward(entry_price, entry_plan.stop_loss, entry_plan.take_profit_1)
+                    >= _MIN_ENTRY_RISK_REWARD
                 ):
-                    idx = bisect.bisect_left(sorted_ts_1h, entry_ts)
                     trade = Trade(
                         symbol=data.symbol,
                         strategy="accumulation",
@@ -116,6 +123,35 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         ts += _STEP_MS
 
     return trades
+
+
+def _find_entry_fill(
+    sorted_ts: list[int],
+    sorted_klines: list[list[Any]],
+    start_ts: int,
+    entry_plan: EntryPlan,
+) -> tuple[int, int, float] | None:
+    start_idx = bisect.bisect_left(sorted_ts, start_ts)
+    end_idx = min(start_idx + _ENTRY_WAIT_CANDLES, len(sorted_klines))
+    for idx in range(start_idx, end_idx):
+        candle = sorted_klines[idx]
+        if len(candle) < 4:
+            continue
+        open_price = float(candle[1])
+        high = float(candle[2])
+        low = float(candle[3])
+        if low <= entry_plan.entry_high and high >= entry_plan.entry_low:
+            entry_price = min(max(open_price, entry_plan.entry_low), entry_plan.entry_high)
+            return idx, int(candle[0]), entry_price
+    return None
+
+
+def _risk_reward(entry_price: float, stop_loss: float, take_profit: float) -> float:
+    risk = entry_price - stop_loss
+    reward = take_profit - entry_price
+    if risk <= 0:
+        return 0.0
+    return reward / risk
 
 
 def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
