@@ -51,8 +51,8 @@ uv run main.py
 ## 部署
 
 ```sh
-chmod +x script/deploy.sh
-./script/deploy.sh
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
 ## 檢查
