@@ -63,7 +63,7 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 |------|------|
 | 時間框架 | 1h（掃描）/ 1d（Pool 計算） |
 | Pool 更新 | 每天重算一次，需 90 天以上日線資料 |
-| 進場條件 | `score_ambush_signal ≥ 20` + 有效進場計畫 |
+| 進場條件 | `score_ambush_signal ≥ 55` + 有效限價進場計畫 |
 | 有效進場計畫 | `vol_breakout ≥ 2×` 且 `d6h > 0` |
 | 停損 | 壓力區下緣 × 0.97（低3%） |
 | 目標1 | 壓力區上緣（resistance） |

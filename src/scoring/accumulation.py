@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from typing import Any
 
+MIN_AMBUSH_TOTAL_SCORE = 55
+
 
 def score_chase_signal(data: Mapping[str, Any]) -> dict[str, Any] | None:
     """Score a chase-long candidate from normalized market data."""
@@ -39,7 +41,7 @@ def score_ambush_signal(data: Mapping[str, Any]) -> dict[str, Any] | None:
     s_sc = _score_sideways_days(int(data["sw_days"]), [120, 90, 75, 60, 45], [20, 17, 14, 10, 6])
     f_sc = _score_negative_funding(float(data["fr_pct"]), max_score=15)
     total = m_sc + o_sc + s_sc + f_sc
-    if total < 20:
+    if total < MIN_AMBUSH_TOTAL_SCORE:
         return None
     return {**dict(data), "total": total, "m_sc": m_sc, "o_sc": o_sc, "s_sc": s_sc, "f_sc": f_sc}
 
