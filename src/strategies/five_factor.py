@@ -136,8 +136,11 @@ class FiveFactor:
         cvd_dir = direction_from_value(cvd)
         oi_dir, oi_change_pct = await self._open_interest(client, symbol)
         funding_rate, funding_dir, mark_price = await self._funding(client, symbol)
+        last_price = await self._last_price(client, symbol)
         lsr_global, lsr_account, lsr_position, lsr_dir = await self._long_short(client, symbol)
-        current_price = mark_price if mark_price > 0 else self._latest_close(klines)
+        current_price = last_price if last_price > 0 else mark_price
+        if current_price <= 0:
+            current_price = self._latest_close(klines)
 
         result = score_five_factor(
             funding_dir=funding_dir,
@@ -223,6 +226,13 @@ class FiveFactor:
         _funding_snapshot[symbol] = current
         direction, _label = funding_direction(current, previous)
         return current, direction, mark_price
+
+    async def _last_price(self, client: BinanceFuturesClient, symbol: str) -> float:
+        """Return the latest traded price for market-entry calculations."""
+        ticker = await client.public_futures_get("/fapi/v1/ticker/price", {"symbol": symbol})
+        if isinstance(ticker, dict):
+            return float(ticker.get("price", 0.0) or 0.0)
+        return 0.0
 
     async def _long_short(
         self, client: BinanceFuturesClient, symbol: str

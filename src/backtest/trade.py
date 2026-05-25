@@ -87,7 +87,7 @@ def simulate_trade(
                     trade.pnl_pct = _partial_short_pnl(entry, tp1, exit_px)
                 else:
                     trade.exit_reason = "stop"
-                    trade.pnl_pct = (entry / exit_px - 1) - _FEE
+                    trade.pnl_pct = _short_pnl(entry, exit_px)
                 return trade
             if not tp1_filled and lo <= tp1:
                 tp1_filled = True
@@ -114,7 +114,9 @@ def simulate_trade(
             trade.pnl_pct = _partial_short_pnl(entry, tp1, close)
     else:
         trade.exit_reason = "timeout"
-        trade.pnl_pct = (close / entry - 1 if direction == "long" else entry / close - 1) - _FEE
+        trade.pnl_pct = (
+            (close / entry - 1) - _FEE if direction == "long" else _short_pnl(entry, close)
+        )
 
     return trade
 
@@ -127,5 +129,9 @@ def _partial_long_pnl(entry: float, first_exit: float, final_exit: float) -> flo
 
 def _partial_short_pnl(entry: float, first_exit: float, final_exit: float) -> float:
     return (
-        _PARTIAL_SIZE * (entry / first_exit - 1) + _PARTIAL_SIZE * (entry / final_exit - 1) - _FEE
+        _PARTIAL_SIZE * (1 - first_exit / entry) + _PARTIAL_SIZE * (1 - final_exit / entry) - _FEE
     )
+
+
+def _short_pnl(entry: float, exit_price: float) -> float:
+    return (1 - exit_price / entry) - _FEE

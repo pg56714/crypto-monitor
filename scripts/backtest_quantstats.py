@@ -91,7 +91,7 @@ async def _run(
         print()
 
     if strategy in ("ff", "both"):
-        print_summary(ff_trades, strategy_name="FiveFactor")
+        print_summary(ff_trades, strategy_name="FiveFactor", start_ms=start_ms, end_ms=end_ms)
         generate_report(
             ff_trades,
             output_path=str(output / "five_factor.html"),
@@ -101,15 +101,19 @@ async def _run(
                 f"{_session_label(ff_session_tz, ff_session_start_hour, ff_session_end_hour)}"
             ),
             strategy_name="FiveFactor",
+            start_ms=start_ms,
+            end_ms=end_ms,
         )
 
     if strategy in ("acc", "both"):
-        print_summary(acc_trades, strategy_name="Accumulation")
+        print_summary(acc_trades, strategy_name="Accumulation", start_ms=start_ms, end_ms=end_ms)
         generate_report(
             acc_trades,
             output_path=str(output / "accumulation.html"),
             title=f"Accumulation Backtest — {days}d / {len(all_data)} symbols",
             strategy_name="Accumulation",
+            start_ms=start_ms,
+            end_ms=end_ms,
         )
 
     if not ff_trades and not acc_trades:
