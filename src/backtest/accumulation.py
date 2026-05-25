@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import bisect
+from dataclasses import dataclass
 from typing import Any
 
 from src.backtest.data import SymbolData
@@ -25,6 +26,17 @@ _ENTRY_WAIT_CANDLES = DEFAULT_ENTRY_WAIT_HOURS
 _MIN_ENTRY_RISK_REWARD = DEFAULT_MIN_RISK_REWARD
 _STEP_MS = 3_600_000
 _DAY_MS = 86_400_000
+
+
+@dataclass(frozen=True)
+class LimitEntryFill:
+    """Limit-entry fill plus the first candle safe to use for exit checks."""
+
+    entry_index: int
+    exit_start_index: int
+    entry_time_ms: int
+    entry_price: float
+    stop_already_breached: bool = False
 
 
 def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -> list[Trade]:
@@ -86,6 +98,7 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
             "coin": data.symbol.replace("USDT", ""),
             "in_pool": True,
             "px_chg": px_chg,
+            "current_price": current_price,
             "fr_pct": fr_pct,
             "vol": float(kline[7]) if len(kline) > 7 else 0.0,
             "est_mcap": current_price * avg_vol * 30,
@@ -101,29 +114,49 @@ def run_accumulation_backtest(data: SymbolData, *, start_ms: int, end_ms: int) -
         if entry_plan is not None and entry_plan.is_valid:
             fill = _find_limit_entry_fill(sorted_ts_1h, sorted_klines_1h, ts + _STEP_MS, entry_plan)
             if fill is not None:
-                idx, entry_ts, entry_price = fill
+                trade = Trade(
+                    symbol=data.symbol,
+                    strategy="accumulation",
+                    direction="long",
+                    entry_time_ms=fill.entry_time_ms,
+                    entry_price=fill.entry_price,
+                    stop_loss=entry_plan.stop_loss,
+                    take_profit_1=entry_plan.take_profit_1,
+                    take_profit_2=entry_plan.take_profit_2,
+                )
+                if fill.stop_already_breached:
+                    simulate_trade(
+                        trade,
+                        [
+                            [
+                                fill.entry_time_ms,
+                                fill.entry_price,
+                                fill.entry_price,
+                                fill.entry_price,
+                                fill.entry_price,
+                            ]
+                        ],
+                        max_candles=1,
+                    )
+                    trades.append(trade)
+                    ts += _STEP_MS
+                    continue
                 if (
-                    entry_price > 0
+                    fill.entry_price > 0
                     and entry_plan.stop_loss > 0
-                    and entry_plan.take_profit_1 > entry_price
+                    and entry_plan.take_profit_1 > fill.entry_price
                     and entry_plan.take_profit_2 > entry_plan.take_profit_1
                     and calculate_risk_reward(
-                        entry_price, entry_plan.stop_loss, entry_plan.take_profit_1
+                        fill.entry_price, entry_plan.stop_loss, entry_plan.take_profit_1
                     )
                     + RISK_REWARD_EPSILON
                     >= _MIN_ENTRY_RISK_REWARD
                 ):
-                    trade = Trade(
-                        symbol=data.symbol,
-                        strategy="accumulation",
-                        direction="long",
-                        entry_time_ms=entry_ts,
-                        entry_price=entry_price,
-                        stop_loss=entry_plan.stop_loss,
-                        take_profit_1=entry_plan.take_profit_1,
-                        take_profit_2=entry_plan.take_profit_2,
+                    simulate_trade(
+                        trade,
+                        sorted_klines_1h[fill.exit_start_index :],
+                        max_candles=_MAX_HOLD_CANDLES,
                     )
-                    simulate_trade(trade, sorted_klines_1h[idx:], max_candles=_MAX_HOLD_CANDLES)
                     trades.append(trade)
 
         ts += _STEP_MS
@@ -136,7 +169,7 @@ def _find_limit_entry_fill(
     sorted_klines: list[list[Any]],
     start_ts: int,
     entry_plan: EntryPlan,
-) -> tuple[int, int, float] | None:
+) -> LimitEntryFill | None:
     start_idx = bisect.bisect_left(sorted_ts, start_ts)
     end_idx = min(start_idx + _ENTRY_WAIT_CANDLES, len(sorted_klines))
     for idx in range(start_idx, end_idx):
@@ -145,11 +178,20 @@ def _find_limit_entry_fill(
             continue
         open_price = float(candle[1])
         low = float(candle[3])
-        if low <= entry_plan.limit_price:
-            entry_price = min(open_price, entry_plan.limit_price)
-            if entry_price <= entry_plan.stop_loss:
-                return None
-            return idx, int(candle[0]), entry_price
+        if low <= entry_plan.entry_price:
+            filled_at_open = open_price <= entry_plan.entry_price
+            entry_price = open_price if filled_at_open else entry_plan.entry_price
+            stop_already_breached = entry_price <= entry_plan.stop_loss
+            exit_start_index = idx
+            if not filled_at_open and low > entry_plan.stop_loss:
+                exit_start_index = idx + 1
+            return LimitEntryFill(
+                entry_index=idx,
+                exit_start_index=exit_start_index,
+                entry_time_ms=int(candle[0]),
+                entry_price=entry_price,
+                stop_already_breached=stop_already_breached,
+            )
     return None
 
 
@@ -166,6 +208,7 @@ def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
         resistance=resistance,
         volume_spike=float(row.get("vol_breakout", 0.0)) >= 2.0,
         whale_inflow=float(row.get("d6h", 0.0)) > 0.0,
+        current_price=float(row.get("current_price", 0.0) or 0.0),
     )
 
 

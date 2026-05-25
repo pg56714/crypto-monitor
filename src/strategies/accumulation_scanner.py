@@ -119,6 +119,7 @@ class AccumulationScanner:
             "symbol": symbol,
             "coin": coin,
             "px_chg": float(ticker.get("priceChangePercent", 0.0) or 0.0),
+            "current_price": float(ticker.get("lastPrice", 0.0) or 0.0),
             "fr_pct": funding_pct,
             "vol": float(ticker.get("quoteVolume", 0.0) or 0.0),
             "est_mcap": market_caps.get(coin, 0.0),
@@ -175,4 +176,5 @@ def _entry_plan(row: dict[str, Any]) -> EntryPlan | None:
         resistance=resistance,
         volume_spike=float(row.get("vol_breakout", 0.0)) >= 2.0,
         whale_inflow=float(row.get("d6h", 0.0)) > 0.0,
+        current_price=float(row.get("current_price", 0.0) or 0.0),
     )

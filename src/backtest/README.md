@@ -51,7 +51,7 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 |------|------|
 | 時間框架 | 讀取 `src/config/notification.json` 的 `FiveFactor.timeframe` |
 | 信號閾值 | score ≥ 4 或 ≤ −4（滿分 ±6） |
-| 去重視窗 | 同方向 4 小時內不重複進場 |
+| 去重視窗 | 同方向 4 小時內不重複進場；上一筆同幣種交易未結束時不加倉 |
 | 停損 | 24根K棒最低/高點；距離 > 8% 改用 1.5% fallback |
 | 目標1 | 進場 + 2R |
 | 目標2 | 進場 + 3R |
@@ -63,7 +63,7 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 |------|------|
 | 時間框架 | 1h（掃描）/ 1d（Pool 計算） |
 | Pool 更新 | 每天重算一次，需 90 天以上日線資料 |
-| 進場條件 | `score_ambush_signal ≥ 55` + 有效限價進場計畫 |
+| 進場條件 | `score_ambush_signal ≥ 55` + 當下價格位於有效進場區 |
 | 有效進場計畫 | `vol_breakout ≥ 2×` 且 `d6h > 0` |
 | 停損 | 壓力區下緣 × 0.97（低3%） |
 | 目標1 | 壓力區上緣（resistance） |
@@ -74,7 +74,9 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 
 ## 進出場邏輯
 
-**進場：** 信號蠟燭收盤後，**下一根K棒開盤價**成交（假設市價單立即成交，無滑點）。
+**進場：** FiveFactor 在信號蠟燭收盤後，以下一根 K 棒開盤價進場；若有設定進場時段，時段判斷也以該實際進場時間為準。Accumulation 以信號當下價格作為進場評估價；若價格位於支撐與風報比允許的進場區內，回測掛出 48 小時有效限價單。後續 K 棒低點觸及進場價時成交，若下一根開盤低於進場價，回測以開盤價估算成交。
+
+**限價單同根處理：** 若 Accumulation 限價單在 K 棒開盤即成交，該根 K 棒可繼續用於停損/停利判斷。若開盤已低於停損，回測記為成交後立即停損，不略過該筆交易。若是在 K 棒內低點觸及才成交，且同根未觸及停損，出場檢查自下一根 K 棒開始，避免把成交前已發生的高點當成停利。
 
 **出場優先順序（每根K棒依序判斷）：**
 1. 開盤價跳空穿越停損 → 以開盤價出場
@@ -86,10 +88,10 @@ uv run -m script.backtest_five_factor --days 7 --top-n 20
 **手續費：** 0.1%（來回，各 0.05%），每筆交易扣除。
 
 **P&L 計算：**
-- 全倉出場：`exit / entry − 1 − fee`
-- TP2 完整達標：`0.5 × (TP1/entry − 1) + 0.5 × (TP2/entry − 1) − fee`
-- TP1 + 超時：`0.5 × (TP1/entry − 1) + 0.5 × (close/entry − 1) − fee`
-- TP1 + 停損：`0.5 × (TP1/entry − 1) + 0.5 × (stop/entry − 1) − fee`
+- 多單全倉出場：`exit / entry − 1 − fee`
+- 空單全倉出場：`1 − exit / entry − fee`
+- 多單分批出場：`0.5 × (first_exit / entry − 1) + 0.5 × (final_exit / entry − 1) − fee`
+- 空單分批出場：`0.5 × (1 − first_exit / entry) + 0.5 × (1 − final_exit / entry) − fee`
 
 ---
 

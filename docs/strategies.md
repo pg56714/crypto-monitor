@@ -11,7 +11,7 @@ Accumulation 用來尋找長時間盤整、資金費率與 OI 開始出現異動
 - `AccumulationPool`：每日更新收籌標的池。
 - `AccumulationScanner`：每小時只掃描標的池，輸出埋伏候選。
 
-`#accumulation` 頻道已代表策略類型，因此推播內容不再附加「埋伏」區塊標題。訊號會在條件足夠時附上單一限價、有效時間、停損、目標與風報比。短線追價與共振類訊號由 FiveFactor 負責。
+`#accumulation` 頻道已代表策略類型，因此推播內容不再附加「埋伏」區塊標題。訊號會在條件足夠時附上以當下價格計算的進場價、有效時間、停損、目標與風報比。短線追價與共振類訊號由 FiveFactor 負責。
 
 ## 2. FiveFactor
 

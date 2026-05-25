@@ -16,7 +16,7 @@ class EntryPlan:
 
     entry_low: float
     entry_high: float
-    limit_price: float
+    entry_price: float
     stop_loss: float
     take_profit_1: float
     take_profit_2: float
@@ -32,6 +32,7 @@ def build_entry_plan(
     resistance: float,
     volume_spike: bool,
     whale_inflow: bool,
+    current_price: float | None = None,
     min_risk_reward: float = DEFAULT_MIN_RISK_REWARD,
     entry_wait_hours: int = DEFAULT_ENTRY_WAIT_HOURS,
     limit_entry_ratio: float = DEFAULT_LIMIT_ENTRY_RATIO,
@@ -52,18 +53,23 @@ def build_entry_plan(
         min_risk_reward=min_risk_reward,
     )
     entry_high = min(avg_whale_price, max_entry)
-    limit_ratio = min(max(limit_entry_ratio, 0.0), 1.0)
-    limit_price = entry_low + ((entry_high - entry_low) * limit_ratio)
-    risk_reward = calculate_risk_reward(limit_price, stop_loss, take_profit_1)
+    if current_price is not None:
+        if current_price <= 0:
+            return None
+        entry_price = current_price
+    else:
+        limit_ratio = min(max(limit_entry_ratio, 0.0), 1.0)
+        entry_price = entry_low + ((entry_high - entry_low) * limit_ratio)
+    risk_reward = calculate_risk_reward(entry_price, stop_loss, take_profit_1)
     is_valid = (
         entry_high >= entry_low
-        and entry_low <= limit_price <= entry_high
+        and entry_low <= entry_price <= entry_high
         and risk_reward + RISK_REWARD_EPSILON >= min_risk_reward
     )
     return EntryPlan(
         entry_low=entry_low,
         entry_high=entry_high,
-        limit_price=limit_price,
+        entry_price=entry_price,
         stop_loss=stop_loss,
         take_profit_1=take_profit_1,
         take_profit_2=take_profit_2,

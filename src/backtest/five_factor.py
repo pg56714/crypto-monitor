@@ -82,16 +82,17 @@ def run_five_factor_backtest(
 
         if abs(result.score) >= _ENTRY_SCORE_MIN:
             direction = "long" if result.score > 0 else "short"
+            entry_ts = ts + step_ms
             if (
                 _in_session(
-                    ts,
+                    entry_ts,
                     timezone=session_timezone,
                     start_hour=session_start_hour,
                     end_hour=session_end_hour,
                 )
                 and ts - last_alert.get(direction, 0) >= dedup_ms
+                and not _has_open_trade(trades, entry_ts)
             ):
-                entry_ts = ts + step_ms
                 entry_kline = klines_by_ts.get(entry_ts)
                 if entry_kline is not None:
                     entry_price = float(entry_kline[1])
@@ -115,6 +116,13 @@ def run_five_factor_backtest(
         ts += step_ms
 
     return trades
+
+
+def _has_open_trade(trades: list[Trade], ts_ms: int) -> bool:
+    return any(
+        trade.entry_time_ms <= ts_ms and (trade.exit_time_ms is None or trade.exit_time_ms > ts_ms)
+        for trade in trades
+    )
 
 
 def _in_session(
