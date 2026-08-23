@@ -9,7 +9,7 @@
 ### 全時段回測
 
 ```powershell
-uv run -m script.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_all
+uv run -m scripts.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_all
 ```
 
 輸出：
@@ -21,17 +21,17 @@ backtest_output\ff_all\five_factor.html
 ### 指定 FiveFactor 時間框架
 
 ```powershell
-uv run -m script.backtest_quantstats --days 30 --top-n 20 --strategy ff --ff-timeframe 30m --output backtest_output\ff_30m
+uv run -m scripts.backtest_quantstats --days 30 --top-n 20 --strategy ff --ff-timeframe 30m --output backtest_output\ff_30m
 ```
 
 ```powershell
-uv run -m script.backtest_quantstats --days 30 --top-n 20 --strategy ff --ff-timeframe 1h --output backtest_output\ff_1h
+uv run -m scripts.backtest_quantstats --days 30 --top-n 20 --strategy ff --ff-timeframe 1h --output backtest_output\ff_1h
 ```
 
 ### 台北時間日盤
 
 ```powershell
-uv run -m script.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_tpe_day --ff-session-tz Asia/Taipei --ff-session-start-hour 8 --ff-session-end-hour 16
+uv run -m scripts.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_tpe_day --ff-session-tz Asia/Taipei --ff-session-start-hour 8 --ff-session-end-hour 16
 ```
 
 輸出：
@@ -43,7 +43,7 @@ backtest_output\ff_tpe_day\five_factor.html
 ### 台北時間美盤
 
 ```powershell
-uv run -m script.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_tpe_us --ff-session-tz Asia/Taipei --ff-session-start-hour 21 --ff-session-end-hour 5
+uv run -m scripts.backtest_quantstats --days 30 --top-n 20 --strategy ff --output backtest_output\ff_tpe_us --ff-session-tz Asia/Taipei --ff-session-start-hour 21 --ff-session-end-hour 5
 ```
 
 輸出：
@@ -68,12 +68,12 @@ backtest_output\ff_tpe_us\five_factor.html
 ### Pool 門檻比較
 
 ```powershell
-uv run -m script.analyze_pool_threshold
+uv run -m scripts.analyze_pool_threshold
 ```
 
 用途：
 
-- 使用 `script/analyze_pool_threshold.py` 內建的 Pool 標的清單。
+- 使用 `scripts/analyze_pool_threshold.py` 內建的 Pool 標的清單。
 - 比較不同 Pool score 門檻下的交易表現。
 - 主要輸出在終端機，不產生 QuantStats HTML。
 
@@ -94,7 +94,7 @@ $poolSymbols = @(
   "HOMEUSDT", "STEEMUSDT", "HIVEUSDT", "ZORAUSDT"
 )
 
-uv run -m script.backtest_quantstats --days 30 --strategy acc --symbols $poolSymbols --output backtest_output\acc_pool
+uv run -m scripts.backtest_quantstats --days 30 --strategy acc --symbols $poolSymbols --output backtest_output\acc_pool
 ```
 
 輸出：
@@ -116,7 +116,7 @@ backtest_output\acc_pool\accumulation.html
 ### 檢查是否已解除
 
 ```powershell
-.\script\check_binance_ban.ps1
+.\scripts\check_binance_ban.ps1
 ```
 
 判斷：

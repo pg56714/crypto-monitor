@@ -10,7 +10,7 @@ src/backtest/
 ├── accumulation.py  # 收籌/埋伏策略回測邏輯
 └── report.py        # Quantstats HTML 報告 + 文字摘要
 
-script/
+scripts/
 ├── backtest_quantstats.py   # 主要入口（兩策略 + HTML 報告）
 └── backtest_five_factor.py  # 分數頻率統計（無進出場模擬）
 ```
@@ -19,13 +19,13 @@ script/
 
 ```bash
 # 兩策略，前 20 大幣種，30 天
-uv run -m script.backtest_quantstats
+uv run -m scripts.backtest_quantstats
 
 # 只跑五因子，指定幣種
-uv run -m script.backtest_quantstats --strategy ff --symbols BTCUSDT ETHUSDT SOLUSDT
+uv run -m scripts.backtest_quantstats --strategy ff --symbols BTCUSDT ETHUSDT SOLUSDT
 
 # 分數頻率分析（不含進出場）
-uv run -m script.backtest_five_factor --days 7 --top-n 20
+uv run -m scripts.backtest_five_factor --days 7 --top-n 20
 ```
 
 | 參數 | 預設 | 說明 |

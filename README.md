@@ -1,71 +1,135 @@
 # crypto-monitor
 
-`crypto-monitor` 是以 APScheduler、ccxt async 與 Discord webhook 為核心的加密貨幣策略通知服務。
+[English](README.md) | [繁體中文](README.zh-TW.md)
 
-策略流程放在 `src/strategies/`，共用的指標、評分與報告邏輯分層放在對應目錄。
+`crypto-monitor` is a scheduled cryptocurrency market-monitoring service built with APScheduler, async ccxt clients, and Discord webhooks. It analyzes public Binance Futures and CoinGecko market data, then sends strategy alerts to configured Discord channels. It does not place or manage trades.
 
-## 目錄結構
+> [!WARNING]
+> This project is provided for educational and research purposes only. Nothing in this repository constitutes financial, investment, trading, or other professional advice. Cryptocurrency markets are highly volatile, and you are solely responsible for evaluating the risks of using this software or acting on its output.
 
-```text
-src/
-├── clients/        # Binance、CoinGecko 等外部 API client
-├── config/         # env 與 notification.json
-├── core/           # scheduler、registry、Discord 輸出、共用設定與路徑
-├── indicators/     # OI、Funding、CVD、LSR、Volatility
-├── reports/        # 各策略 Discord 訊息格式
-├── scoring/        # five-factor、accumulation、entry engine 評分
-└── strategies/     # 策略流程
-```
+## Features
 
-詳細 `src` 分層說明見 [src/README.md](src/README.md)。
+- Scheduled Discord alerts with centralized error reporting.
+- FiveFactor signals based on funding, CVD, open interest, long/short ratios, and price action.
+- Accumulation pool discovery and hourly candidate scanning.
+- Historical backtesting with cached public market data and QuantStats reports.
+- Strategy-level configuration without changing scheduler code.
+- Docker deployment with automatic container restart.
 
-## 策略說明
+## Requirements
 
-2 個策略的用途、邏輯、排程與輸出頻道見 [docs/strategies.md](docs/strategies.md)。
+- Python 3.12
+- [uv](https://docs.astral.sh/uv/)
+- Discord webhook URLs for the enabled notification channels
+- Network access to the Binance Futures and CoinGecko public APIs
+- Docker, only when using the container deployment workflow
 
-## 環境變數
-
-參考 `.env.sample`：
-
-```text
-DISCORD_CHANNEL_TEST=
-DISCORD_CHANNEL_CRITICAL=
-DISCORD_CHANNEL_ACCUMULATION=
-DISCORD_CHANNEL_FIVE_FACTOR=
-```
-
-`DISCORD_CHANNEL_TEST` 是啟動檢查頻道。程式啟動時會先送出 boot check 訊息，用來確認 Discord webhook 與通知管線可用。
-
-`DISCORD_CHANNEL_CRITICAL` 是監控錯誤頻道。排程工作發生未捕捉例外時，錯誤會送到此頻道，訊息開頭格式為 `[monitor] <JobName> error at <timestamp>`，後面附上 traceback 摘要。
-
-`DISCORD_CHANNEL_ACCUMULATION` 與 `DISCORD_CHANNEL_FIVE_FACTOR` 是策略輸出頻道；只有在 `src/config/notification.json` 內對應策略 `enabled: true` 時才是啟動必要環境變數。
-
-## 安裝與執行
+## Quick start
 
 ```sh
-uv venv
-uv sync
+git clone https://github.com/pg56714/crypto-monitor.git
+cd crypto-monitor
+cp .env.sample .env
+uv sync --locked
 uv run main.py
 ```
 
-## 部署
+On PowerShell, create the environment file with:
+
+```powershell
+Copy-Item .env.sample .env
+```
+
+Before starting the service, add your Discord webhook URLs to `.env` and review the enabled strategies in [`src/config/notification.json`](src/config/notification.json).
+
+## Environment variables
+
+| Variable | Purpose | Required |
+| --- | --- | --- |
+| `DISCORD_CHANNEL_TEST` | Receives the startup boot check. | Always |
+| `DISCORD_CHANNEL_CRITICAL` | Receives uncaught scheduler errors. | Always |
+| `DISCORD_CHANNEL_ACCUMULATION` | Receives Accumulation alerts. | When Accumulation is enabled |
+| `DISCORD_CHANNEL_FIVE_FACTOR` | Receives FiveFactor alerts. | When FiveFactor is enabled |
+
+Use [`.env.sample`](.env.sample) as the template. Never commit real webhook URLs.
+
+## Strategies
+
+### FiveFactor
+
+Runs hourly and evaluates USDT perpetual markets using funding, CVD, open interest, long/short ratios, and recent price direction. It sends long alerts at a score of `4` or higher and short alerts at `-4` or lower.
+
+### Accumulation
+
+Builds a daily pool of markets showing prolonged consolidation and changing funding or open-interest conditions. An hourly scanner then evaluates only the pooled symbols for potential accumulation entries.
+
+Strategy registration is controlled by the `enabled` fields in [`src/config/notification.json`](src/config/notification.json).
+
+## Scheduling
+
+All APScheduler jobs use UTC:
+
+- FiveFactor runs at minute `01:10` of every hour.
+- AccumulationPool runs daily at `18:00 UTC` (`02:00` the following day in Taipei).
+- AccumulationScanner runs at minute `30:00` of every hour.
+- When Accumulation is enabled, the pool is initialized once at startup if necessary.
+
+## Backtesting
+
+Run both strategies for the default 30-day window:
+
+```sh
+uv run -m scripts.backtest_quantstats
+```
+
+Run FiveFactor for selected symbols:
+
+```sh
+uv run -m scripts.backtest_quantstats --strategy ff --symbols BTCUSDT ETHUSDT SOLUSDT
+```
+
+Generated reports and cached market data are stored in `backtest_output/`, which is excluded from Git.
+
+## Docker deployment
+
+Create `.env` first, then run:
 
 ```sh
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 ```
 
-## 檢查
+The script builds the image, replaces the existing `crypto-monitor` container, verifies that the new container is running, and configures it with `--restart unless-stopped`.
+
+## Tests and quality checks
 
 ```sh
+uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .
 ```
 
-## 排程
+## Project structure
 
-APScheduler 目前明確使用 UTC。`AccumulationPool` 排程在 `18:00 UTC`，對應台北時間隔日 `02:00`。
+```text
+src/
+├── backtest/       # Historical data, trade simulation, and reports
+├── clients/        # Binance and CoinGecko API clients
+├── config/         # Environment and strategy configuration
+├── core/           # Scheduler, registry, Discord, and shared paths
+├── indicators/     # OI, funding, CVD, LSR, and volatility indicators
+├── reports/        # Discord message formatting
+├── scoring/        # Strategy scores and entry-plan calculations
+└── strategies/     # Scheduled strategy workflows
+```
 
-程式啟動時若 `Accumulation` 啟用且行程內 `POOL` 尚未建立，會先執行一次 `AccumulationPool`，讓後續每小時的收籌掃描有標的池可用。`AccumulationScanner` 只掃描 `POOL` 內標的並輸出埋伏候選。
+Additional documentation:
 
-`src/core/registry.py` 的 `schedule()` 讀取 `src/config/notification.json` 的 `enabled` 欄位，只註冊 `enabled: true` 的策略。
+- [Strategy reference](docs/strategies.md) (Traditional Chinese)
+- [Backtest runbook](docs/backtest_runbook.md) (Traditional Chinese)
+- [Source architecture](src/README.md) (Traditional Chinese)
+- [Backtest architecture](src/backtest/README.md) (Traditional Chinese)
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

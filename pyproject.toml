@@ -8,7 +8,7 @@ dependencies = [
   "python-dotenv>=1.1.1",
   "quantstats>=0.0.62",
 ]
-description = "Add your description here"
+description = "Scheduled cryptocurrency market monitoring and Discord strategy alerts"
 name = "crypto-monitor"
 readme = "README.md"
 requires-python = ">=3.12"
