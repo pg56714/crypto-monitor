@@ -1,11 +1,11 @@
 [project]
 dependencies = [
-  "aiohttp>=3.9.5",
+  "aiohttp>=3.14.4",
   "apscheduler>=3.11.0",
   "ccxt>=4.5.10",
   "discord>=2.3.2",
-  "polars>=1.0",
-  "python-dotenv>=1.1.1",
+  "polars>=1.0,<2",
+  "python-dotenv>=1.2.2",
   "quantstats>=0.0.62",
 ]
 description = "Scheduled cryptocurrency market monitoring and Discord strategy alerts"
